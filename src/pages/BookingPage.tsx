@@ -321,41 +321,47 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {payMethod === 'transfer' && (
-              <div className="p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-br from-white to-blue-50">
-                <h3 className="font-bold text-center text-gray-800 mb-4">ชำระเงินผ่าน PromptPay</h3>
+{payMethod === 'transfer' && (
+  <div className="p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-br from-white to-blue-50">
+    <h3 className="font-bold text-center text-gray-800 mb-4">ชำระเงินผ่าน PromptPay</h3>
 
-                <div className="bg-white p-4 inline-block rounded-xl shadow-md mx-auto block w-fit mb-4">
-                  <div className="w-48 h-48 bg-gray-200 rounded-lg flex items-center justify-center">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600 mb-2">QR Code PromptPay</p>
-                      <p className="text-xs text-gray-500">สแกนเพื่อชำระ {price} บาท</p>
-                    </div>
-                  </div>
-                </div>
+    <div className="bg-white p-4 inline-block rounded-xl shadow-md mx-auto block w-fit mb-4">
+      <div className="w-64 h-auto bg-white rounded-lg flex flex-col items-center justify-center">
+        {/* ดึงรูป QR ตามราคาที่คำนวณได้จริง (375 หรือ 750) */}
+        <img 
+          src={`https://promptpay.io/0972396095/${price}.png`} 
+          alt="PromptPay QR Code" 
+          className="w-full h-auto rounded-lg mb-2"
+        />
+        <div className="text-center">
+          <p className="text-sm font-bold text-blue-900">ยอดเงินที่ต้องชำระ: {price} บาท</p>
+          <p className="text-[10px] text-gray-400 mt-1">ชื่อบัญชี: 097-239-6095</p>
+        </div>
+      </div>
+    </div>
 
-                <div className="text-center mb-4">
-                  <p className="text-sm text-gray-600">หรือโอนไปที่</p>
-                  <p className="font-mono font-bold text-lg text-gray-800">0XX-XXX-XXXX</p>
-                  <p className="text-sm text-gray-600">ธนาคาร XXX</p>
-                </div>
+    <div className="text-center mb-4 p-3 bg-white rounded-lg border border-blue-100">
+      <p className="text-sm text-gray-600">หรือโอนไปที่เบอร์โทรศัพท์</p>
+      <p className="font-mono font-bold text-xl text-blue-800">097-239-6095</p>
+      <p className="text-sm text-gray-600">พร้อมเพย์ (PromptPay)</p>
+    </div>
 
-                <label className="block">
-                  <span className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    แนบหลักฐานการโอนเงิน <span className="text-red-500">*</span>
-                  </span>
-                  <input
-                    type="file"
-                    required
-                    accept="image/*"
-                    onChange={(e) => setPaymentSlipFile(e.target.files?.[0] || null)}
-                    className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
-                  />
-                  <p className="text-xs text-blue-600 mt-2">ระบบจะตรวจสอบสลิปและส่งอีเมลยืนยันภายใน 24 ชั่วโมง</p>
-                </label>
-              </div>
-            )}
+    <label className="block">
+      <span className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+        <Upload className="w-4 h-4" />
+        แนบหลักฐานการโอนเงิน <span className="text-red-500">*</span>
+      </span>
+      <input
+        type="file"
+        required
+        accept="image/*"
+        onChange={(e) => setPaymentSlipFile(e.target.files?.[0] || null)}
+        className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
+      />
+      <p className="text-xs text-blue-600 mt-2 italic">** กรุณาตรวจสอบยอดเงินให้ถูกต้อง ({price} บาท) ก่อนโอน</p>
+    </label>
+  </div>
+)}
 
             <button
               type="submit"
