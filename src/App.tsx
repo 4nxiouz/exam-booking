@@ -11,7 +11,7 @@ function App() {
 
   // 1. เพิ่มรายชื่อ Admin ตรงนี้ (กี่เมลก็ได้)
   const allowedEmails = [
-    'admin1@gmail.com', 
+    'bass.chinz@gmail.com', 
     'admin2@hotmail.com',
     'yourname@gmail.com'
   ];
