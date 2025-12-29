@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, Clock, ExternalLink, Calendar, Users, Plus } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, ExternalLink, Calendar, Users } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -15,7 +15,6 @@ interface Booking {
   id_card_url: string | null;
   payment_slip_url: string | null;
   created_at: string;
-  exam_round_id: string;
   exam_round: {
     exam_date: string;
     exam_time: string;
@@ -36,9 +35,6 @@ export default function AdminDashboard() {
   const [rounds, setRounds] = useState<ExamRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  
-  // สถานะสำหรับเพิ่มรอบสอบใหม่
-  const [newRound, setNewRound] = useState({ exam_date: '', exam_time: 'Morning', max_seats: 30 });
 
   useEffect(() => {
     fetchData();
@@ -49,7 +45,10 @@ export default function AdminDashboard() {
     const [bookingsResult, roundsResult] = await Promise.all([
       supabase
         .from('bookings')
-        .select(`*, exam_round:exam_rounds(exam_date, exam_time)`)
+        .select(`
+          *,
+          exam_round:exam_rounds(exam_date, exam_time)
+        `)
         .order('created_at', { ascending: false }),
       supabase
         .from('exam_rounds')
@@ -62,23 +61,7 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  // ฟังก์ชันเพิ่มรอบสอบ
-  const addRound = async () => {
-    if (!newRound.exam_date) return alert('กรุณาเลือกวันที่');
-    
-    const { error } = await supabase
-      .from('exam_rounds')
-      .insert([{ ...newRound, current_seats: 0, is_active: true }]);
-
-    if (error) {
-      alert('เพิ่มรอบสอบไม่สำเร็จ: ' + error.message);
-    } else {
-      alert('เพิ่มรอบสอบสำเร็จ!');
-      fetchData();
-    }
-  };
-
-  const updatePaymentStatus = async (bookingId: string, status: string, roundId: string) => {
+  const updatePaymentStatus = async (bookingId: string, status: string) => {
     const { error } = await supabase
       .from('bookings')
       .update({
@@ -87,120 +70,265 @@ export default function AdminDashboard() {
       })
       .eq('id', bookingId);
 
-    if (!error && status === 'verified') {
-      // ตัดที่นั่งเมื่ออนุมัติ
-      const round = rounds.find(r => r.id === roundId);
-      await supabase
-        .from('exam_rounds')
-        .update({ current_seats: (round?.current_seats || 0) + 1 })
-        .eq('id', roundId);
+    if (!error) {
+      fetchData();
     }
-    
-    fetchData();
   };
 
   const getUserTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      tg: 'พนักงาน TG', wingspan: 'Wingspan', intern: 'นักศึกษา', general: 'บุคคลทั่วไป'
+      tg: 'พนักงาน TG',
+      wingspan: 'Wingspan',
+      intern: 'นักศึกษา',
+      general: 'บุคคลทั่วไป'
     };
     return labels[type] || type;
   };
 
-  const filteredBookings = filterStatus === 'all' 
-    ? bookings 
+  const filteredBookings = filterStatus === 'all'
+    ? bookings
     : bookings.filter(b => b.payment_status === filterStatus);
 
   const stats = {
     total: bookings.length,
     pending: bookings.filter(b => b.payment_status === 'pending').length,
     verified: bookings.filter(b => b.payment_status === 'verified').length,
-    revenue: bookings.filter(b => b.payment_status === 'verified').reduce((sum, b) => sum + b.price, 0)
+    rejected: bookings.filter(b => b.payment_status === 'rejected').length,
+    revenue: bookings
+      .filter(b => b.payment_status === 'verified')
+      .reduce((sum, b) => sum + b.price, 0)
   };
 
-  if (loading) return <div className="p-20 text-center">กำลังโหลดข้อมูล...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 font-sans text-slate-900">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-black mb-8 text-slate-800 tracking-tight">Admin Dashboard</h1>
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 mb-6">ระบบจัดการการจอง</h1>
 
-        {/* ส่วนเพิ่มรอบสอบใหม่ */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm mb-8 border border-blue-100">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2 text-blue-700">
-            <Plus className="w-5 h-5" /> เพิ่มรอบสอบใหม่
-          </h2>
-          <div className="grid md:grid-cols-4 gap-4">
-            <input type="date" className="border p-2 rounded-xl text-sm" onChange={(e) => setNewRound({...newRound, exam_date: e.target.value})} />
-            <select className="border p-2 rounded-xl text-sm" onChange={(e) => setNewRound({...newRound, exam_time: e.target.value})}>
-              <option value="Morning">รอบเช้า (09:00-12:00)</option>
-              <option value="Afternoon">รอบบ่าย (13:00-16:00)</option>
-            </select>
-            <input type="number" placeholder="ที่นั่ง" className="border p-2 rounded-xl text-sm" onChange={(e) => setNewRound({...newRound, max_seats: parseInt(e.target.value)})} />
-            <button onClick={addRound} className="bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition">เพิ่มรอบสอบ</button>
-          </div>
-        </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                <p className="text-sm text-gray-600">ทั้งหมด</p>
+              </div>
+              <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+            </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-            <p className="text-sm text-slate-500">จองทั้งหมด</p>
-            <p className="text-2xl font-black">{stats.total}</p>
-          </div>
-          <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200">
-            <p className="text-sm text-yellow-700">รอตรวจสอบ</p>
-            <p className="text-2xl font-black text-yellow-700">{stats.pending}</p>
-          </div>
-          <div className="bg-green-50 p-4 rounded-2xl border border-green-200">
-            <p className="text-sm text-green-700">ยืนยันแล้ว</p>
-            <p className="text-2xl font-black text-green-700">{stats.verified}</p>
-          </div>
-          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200">
-            <p className="text-sm text-blue-700">รายได้สะสม</p>
-            <p className="text-2xl font-black text-blue-700">{stats.revenue.toLocaleString()}฿</p>
-          </div>
-        </div>
+            <div className="bg-yellow-50 p-4 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-5 h-5 text-yellow-600" />
+                <p className="text-sm text-gray-600">รอตรวจสอบ</p>
+              </div>
+              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+            </div>
 
-        {/* Booking List */}
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            {['all', 'pending', 'verified', 'rejected'].map((s) => (
-                <button key={s} onClick={() => setFilterStatus(s)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${filterStatus === s ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border'}`}>
-                    {s === 'all' ? 'ทั้งหมด' : s === 'pending' ? 'รอตรวจ' : s === 'verified' ? 'จ่ายแล้ว' : 'ยกเลิก'}
-                </button>
-            ))}
+            <div className="bg-green-50 p-4 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <p className="text-sm text-gray-600">ยืนยันแล้ว</p>
+              </div>
+              <p className="text-2xl font-bold text-green-600">{stats.verified}</p>
+            </div>
+
+            <div className="bg-red-50 p-4 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                <p className="text-sm text-gray-600">ปฏิเสธ</p>
+              </div>
+              <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
+            </div>
+
+            <div className="bg-purple-50 p-4 rounded-xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-5 h-5 text-purple-600" />
+                <p className="text-sm text-gray-600">รายได้</p>
+              </div>
+              <p className="text-xl font-bold text-purple-600">{stats.revenue.toLocaleString()}฿</p>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold mb-3">สถานะรอบสอบ</h2>
+            <div className="grid md:grid-cols-3 gap-3">
+              {rounds.map(round => (
+                <div key={round.id} className="bg-gray-50 p-4 rounded-lg border">
+                  <p className="font-semibold text-gray-800">
+                    {new Date(round.exam_date).toLocaleDateString('th-TH', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    {round.exam_time === 'Morning' ? 'เช้า 09:00-12:00' : 'บ่าย 13:00-16:00'}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">
+                      {round.current_seats}/{round.max_seats} ที่
+                    </span>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      round.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {round.is_active ? 'เปิดรับ' : 'ปิด'}
+                    </span>
+                  </div>
+                  <div className="mt-2 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      style={{ width: `${(round.current_seats / round.max_seats) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setFilterStatus('all')}
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                filterStatus === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              ทั้งหมด ({stats.total})
+            </button>
+            <button
+              onClick={() => setFilterStatus('pending')}
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                filterStatus === 'pending'
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              รอตรวจสอบ ({stats.pending})
+            </button>
+            <button
+              onClick={() => setFilterStatus('verified')}
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                filterStatus === 'verified'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              ยืนยันแล้ว ({stats.verified})
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4">
           {filteredBookings.map(booking => (
-            <div key={booking.id} className="bg-white rounded-2xl shadow-sm border p-5 flex flex-col md:flex-row justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="font-mono font-bold text-lg text-blue-600">{booking.booking_code}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${booking.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                    {booking.payment_status.toUpperCase()}
-                  </span>
+            <div key={booking.id} className="bg-white rounded-xl shadow p-6">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl font-bold text-blue-600">{booking.booking_code}</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      booking.payment_status === 'verified'
+                        ? 'bg-green-100 text-green-700'
+                        : booking.payment_status === 'rejected'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {booking.payment_status === 'verified'
+                        ? 'ยืนยันแล้ว'
+                        : booking.payment_status === 'rejected'
+                        ? 'ปฏิเสธ'
+                        : 'รอตรวจสอบ'}
+                    </span>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-600 mb-1">ข้อมูลผู้จอง</p>
+                      <p className="font-semibold">{booking.full_name}</p>
+                      <p className="text-gray-600">{booking.email}</p>
+                      <p className="text-gray-600">{booking.phone}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-gray-600 mb-1">รายละเอียดการสอบ</p>
+                      <p className="font-semibold">
+                        {new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                      <p className="text-gray-600">
+                        {booking.exam_round.exam_time === 'Morning' ? 'เช้า 09:00-12:00' : 'บ่าย 13:00-16:00'}
+                      </p>
+                      <p className="text-gray-600">
+                        {getUserTypeLabel(booking.user_type)} - {booking.price} บาท
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-4">
+                    {booking.id_card_url && (
+                      <a
+                        href={booking.id_card_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        บัตรพนักงาน
+                      </a>
+                    )}
+                    {booking.payment_slip_url && (
+                      <a
+                        href={booking.payment_slip_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        สลิปโอนเงิน
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <h3 className="font-bold text-slate-800">{booking.full_name} <span className="text-slate-400 font-normal text-sm">({getUserTypeLabel(booking.user_type)})</span></h3>
-                <p className="text-sm text-slate-500">{booking.phone} | {booking.email}</p>
-                <div className="mt-3 flex gap-4 text-xs font-medium text-slate-600">
-                  <span className="flex items-center gap-1"><Calendar size={14}/> {new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH')}</span>
-                  <span className="flex items-center gap-1"><Clock size={14}/> {booking.exam_round.exam_time === 'Morning' ? '09:00-12:00' : '13:00-16:00'}</span>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex flex-col gap-2">
-                    {booking.payment_slip_url && <a href={booking.payment_slip_url} target="_blank" className="text-xs font-bold text-blue-600 flex items-center gap-1 hover:underline"><ExternalLink size={12}/> สลิปโอนเงิน</a>}
-                    {booking.id_card_url && <a href={booking.id_card_url} target="_blank" className="text-xs font-bold text-slate-600 flex items-center gap-1 hover:underline"><ExternalLink size={12}/> บัตร ปชช/พนักงาน</a>}
-                </div>
+
                 {booking.payment_status === 'pending' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"><CheckCircle size={20}/></button>
-                    <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"><XCircle size={20}/></button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => updatePaymentStatus(booking.id, 'verified')}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      อนุมัติ
+                    </button>
+                    <button
+                      onClick={() => updatePaymentStatus(booking.id, 'rejected')}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      ปฏิเสธ
+                    </button>
                   </div>
                 )}
               </div>
             </div>
           ))}
+
+          {filteredBookings.length === 0 && (
+            <div className="bg-white rounded-xl shadow p-12 text-center">
+              <p className="text-gray-500">ไม่มีข้อมูลการจอง</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
