@@ -1,76 +1,135 @@
 import { useState, useEffect } from 'react';
+
 import { supabase } from './lib/supabase';
+
 import BookingPage from './pages/BookingPage';
+
 import AdminDashboard from './pages/AdminDashboard';
-import AdminLogin from './pages/AdminLogin'; 
-import { Settings, LogOut } from 'lucide-react';
+
+import AdminLogin from './pages/AdminLogin.tsx';
+
+import { Settings } from 'lucide-react';
+
+
 
 function App() {
+
   const [showAdmin, setShowAdmin] = useState(false);
+
   const [user, setUser] = useState<any>(null);
+
+
+
+  // รายชื่ออีเมลที่มีสิทธิ์เข้าหลังบ้าน
 
   const allowedEmails = ['bass.chinz@gmail.com']; 
 
+
+
   useEffect(() => {
+
+    // เช็คว่าล็อกอินค้างไว้ไหม
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+
       setUser(session?.user ?? null);
+
     });
+
+
+
+    // ติดตามการเปลี่ยนแปลงสถานะ (Login/Logout)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+
       setUser(session?.user ?? null);
+
     });
 
+
+
     return () => subscription.unsubscribe();
+
   }, []);
+
+
 
   const isAdmin = user && allowedEmails.includes(user.email);
 
+
+
   return (
+
     <div className="relative">
-      {/* ปุ่มตั้งค่า - อาจจะทำสีให้จางลงหน่อยจะได้ไม่ดึงดูดสายตาคนทั่วไป */}
+
       <button
+
         onClick={() => setShowAdmin(!showAdmin)}
-        className="fixed top-4 right-4 z-50 bg-white/80 p-2 rounded-full shadow-md hover:bg-white transition-all opacity-20 hover:opacity-100"
-        title="Admin Section"
+
+        className="fixed top-4 right-4 z-50 bg-white p-3 rounded-full shadow-lg hover:shadow-xl transition"
+
+        title={showAdmin ? 'กลับหน้าจอง' : 'หน้าแอดมิน'}
+
       >
-        <Settings className={`w-5 h-5 text-gray-500 ${showAdmin ? 'rotate-90' : ''}`} />
+
+        <Settings className={`w-6 h-6 text-gray-700 transition-transform ${showAdmin ? 'rotate-180' : ''}`} />
+
       </button>
 
-      {/* ถ้าเป็น Admin และล็อกอินอยู่ ให้มีปุ่ม Logout ลอยขึ้นมาด้วย */}
-      {showAdmin && user && (
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="fixed top-16 right-4 z-50 bg-red-50 text-red-600 p-2 rounded-full shadow-md hover:bg-red-100 transition-all"
-          title="ออกจากระบบ"
-        >
-          <LogOut className="w-5 h-5" />
-        </button>
-      )}
+
 
       {showAdmin ? (
+
+        // ถ้ากดเข้าหน้า Admin
+
         !user ? (
-          <AdminLogin /> 
+
+          <AdminLogin /> // ถ้ายังไม่ Login ให้ไปหน้า Login ก่อน
+
         ) : isAdmin ? (
-          <AdminDashboard /> 
+
+          <AdminDashboard /> // ถ้า Login แล้วและเมลถูกต้อง ให้เข้า Dashboard
+
         ) : (
-          <div className="min-h-screen flex items-center justify-center bg-gray-100 flex-col gap-4 p-4 text-center">
-            <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full">
-              <p className="text-red-500 font-bold text-lg mb-2">Access Denied</p>
-              <p className="text-gray-600 mb-6">อีเมล {user.email} <br/>ไม่มีสิทธิ์เข้าถึงระบบหลังบ้าน</p>
-              <button 
-                onClick={() => supabase.auth.signOut()} 
-                className="w-full bg-gray-800 text-white py-2 rounded-xl font-medium hover:bg-black transition"
-              >
-                ออกจากระบบ
-              </button>
-            </div>
+
+          <div className="min-h-screen flex items-center justify-center bg-gray-100 flex-col gap-4">
+
+            <p className="text-red-500 font-bold bg-white p-6 rounded-2xl shadow">
+
+              อีเมล {user.email} ไม่มีสิทธิ์เข้าถึงระบบนี้
+
+            </p>
+
+            <button 
+
+              onClick={() => supabase.auth.signOut()} 
+
+              className="text-blue-600 underline font-medium"
+
+            >
+
+              ออกจากระบบเพื่อใช้บัญชีอื่น
+
+            </button>
+
           </div>
+
         )
+
       ) : (
+
+        // หน้าจองสอบปกติ
+
         <BookingPage />
+
       )}
+
     </div>
+
   );
+
 }
+
+
 
 export default App;
