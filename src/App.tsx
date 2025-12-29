@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import BookingPage from './pages/BookingPage';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminLogin from './pages/AdminLogin';
+import AdminLogin from './pages/AdminLogin.tsx';
 import { Settings } from 'lucide-react';
 
 function App() {
