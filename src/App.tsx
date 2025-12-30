@@ -3,7 +3,7 @@ import { supabase } from './lib/supabase';
 import BookingPage from './pages/BookingPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './pages/AdminLogin';
-import { Settings, Home } from 'lucide-react'; // เพิ่มไอคอน Home
+import { Settings, Home } from 'lucide-react';
 
 function App() {
   const [showAdmin, setShowAdmin] = useState(false);
@@ -11,11 +11,11 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   // รายชื่ออีเมลที่มีสิทธิ์เข้าหลังบ้าน
-const allowedEmails = [
-  'bass.chinz@gmail.com', 
-  'admin2@gmail.com', 
-  'friend@gmail.com'
-];
+  const allowedEmails = [
+    'bass.chinz@gmail.com', 
+    'admin2@gmail.com', 
+    'friend@gmail.com'
+  ];
 
   useEffect(() => {
     // เช็ค Session ครั้งแรก
@@ -24,6 +24,7 @@ const allowedEmails = [
       setLoading(false);
     });
 
+    // ติดตามการเปลี่ยนแปลงสถานะ
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -31,27 +32,37 @@ const allowedEmails = [
     return () => subscription.unsubscribe();
   }, []);
 
-  const isAdmin = user && user.email && allowedEmails.includes(user.email.toLowerCase());
+  const isAdmin = user && user.email && allowedEmails.map(e => e.toLowerCase()).includes(user.email.toLowerCase());
 
-  if (loading) return null; // หรือใส่ Spinner เล็กๆ
+  // Logic พิเศษ: ถ้าเปิดหน้าแอดมินค้างไว้ แต่ User ที่ Login เข้ามาไม่ใช่แอดมิน ให้ดีดกลับหน้าจองทันที
+  useEffect(() => {
+    if (showAdmin && user && !isAdmin) {
+      setShowAdmin(false);
+    }
+  }, [user, isAdmin, showAdmin]);
+
+  if (loading) return null;
 
   return (
     <div className="relative">
-      {/* ปุ่มสลับหน้า: 
-        1. ถ้ายังไม่ Login มึงอาจจะอยากซ่อนไว้ (แต่ถ้าจะเอาไว้กดไปหน้า Login แอดมินก็ตามโค้ดเดิม) 
-        2. กูเปลี่ยนไอคอนให้สลับกันตามสถานะเพื่อความไม่งง
+      {/* --- 🛠 ส่วนของปุ่มลับ ---
+        จะแสดงผลเฉพาะตอนที่:
+        1. ยังไม่ได้ Login (เพื่อให้แอดมินกดเข้าไป Login)
+        2. Login แล้ว และต้องเป็นอีเมลแอดมินเท่านั้น
       */}
-      <button
-        onClick={() => setShowAdmin(!showAdmin)}
-        className="fixed bottom-6 right-6 z-50 bg-blue-600 p-4 rounded-full shadow-2xl hover:bg-blue-700 transition-all text-white group"
-        title={showAdmin ? 'กลับหน้าจอง' : 'เข้าสู่ระบบแอดมิน'}
-      >
-        {showAdmin ? (
-          <Home className="w-6 h-6" />
-        ) : (
-          <Settings className="w-6 h-6 group-hover:rotate-90 transition-transform" />
-        )}
-      </button>
+      {(!user || isAdmin) && (
+        <button
+          onClick={() => setShowAdmin(!showAdmin)}
+          className="fixed bottom-6 right-6 z-50 bg-blue-600 p-4 rounded-full shadow-2xl hover:bg-blue-700 transition-all text-white group"
+          title={showAdmin ? 'กลับหน้าจอง' : 'เข้าสู่ระบบแอดมิน'}
+        >
+          {showAdmin ? (
+            <Home className="w-6 h-6" />
+          ) : (
+            <Settings className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+          )}
+        </button>
+      )}
 
       {showAdmin ? (
         // --- ส่วนของ ADMIN ---
@@ -60,35 +71,16 @@ const allowedEmails = [
         ) : isAdmin ? (
           <AdminDashboard /> 
         ) : (
+          /* ส่วนนี้จะแทบไม่เห็นแล้วเพราะโดน Redirect ดีดออกไปก่อน แต่กันเหนียวไว้ */
           <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
             <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm w-full text-center">
-              <div className="bg-red-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Settings className="text-red-600 w-8 h-8" />
-              </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">ไม่มีสิทธิ์เข้าถึง</h2>
-              <p className="text-gray-600 mb-6">
-                อีเมล <span className="font-semibold text-gray-900">{user.email}</span> <br/>
-                ไม่มีสิทธิ์ในฐานะผู้ดูแลระบบ
-              </p>
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={() => supabase.auth.signOut()} 
-                  className="bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition"
-                >
-                  ออกจากระบบ
-                </button>
-                <button 
-                  onClick={() => setShowAdmin(false)} 
-                  className="text-gray-500 font-medium hover:underline"
-                >
-                  กลับไปหน้าจองสอบ
-                </button>
-              </div>
+              <button onClick={() => supabase.auth.signOut()} className="mt-4 text-blue-600">ออกจากระบบ</button>
             </div>
           </div>
         )
       ) : (
-        // --- ส่วนของ USER ---
+        // --- ส่วนของ USER (หน้าจองสอบ) ---
         <BookingPage />
       )}
     </div>
