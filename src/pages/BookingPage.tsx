@@ -110,7 +110,16 @@ export default function BookingPage() {
         .select()
         .single();
 
-      if (error) throw error;
+if (error) throw error;
+
+      // --- เพิ่มโค้ดส่วนนี้เข้าไปเพื่อตัดที่นั่ง (Update current_seats) ---
+      const { error: updateError } = await supabase
+        .from('exam_rounds')
+        .update({ current_seats: round.current_seats + 1 })
+        .eq('id', selectedRound);
+
+      if (updateError) throw updateError;
+      // -----------------------------------------------------------
 
       setBookingCode(booking.booking_code);
       setSuccess(true);
