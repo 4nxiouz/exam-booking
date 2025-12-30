@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface ExamRound {
   id: string;
