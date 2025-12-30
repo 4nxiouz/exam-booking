@@ -54,7 +54,7 @@ function App() {
 
 
 
-  const isAdmin = user && allowedEmails.includes(user.email);
+  const isAdmin = user && user.email && allowedEmails.map(e => e.toLowerCase()).includes(user.email.toLowerCase());
 
 
 
