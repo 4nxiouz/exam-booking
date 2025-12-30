@@ -80,6 +80,7 @@ export default function BookingPage() {
         return;
       }
 
+      
       let idCardUrl = null;
       let paymentSlipUrl = null;
 
