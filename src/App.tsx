@@ -6,7 +6,7 @@ import BookingPage from './pages/BookingPage';
 
 import AdminDashboard from './pages/AdminDashboard';
 
-import AdminLogin from './pages/AdminLogin.tsx';
+import AdminLogin from './pages/AdminLogin';
 
 import { Settings } from 'lucide-react';
 
