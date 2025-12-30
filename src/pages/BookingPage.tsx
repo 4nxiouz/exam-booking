@@ -337,26 +337,31 @@ if (error) throw error;
   <div className="p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-br from-white to-blue-50">
     <h3 className="font-bold text-center text-gray-800 mb-4">ชำระเงินผ่าน PromptPay</h3>
 
-    <div className="bg-white p-4 inline-block rounded-xl shadow-md mx-auto block w-fit mb-4">
-      <div className="w-64 h-auto bg-white rounded-lg flex flex-col items-center justify-center">
-        {/* ดึงรูป QR ตามราคาที่คำนวณได้จริง (375 หรือ 750) */}
-        <img 
-          src={`https://promptpay.io/0972396095/${price}.png`} 
-          alt="PromptPay QR Code" 
-          className="w-full h-auto rounded-lg mb-2"
-        />
-        <div className="text-center">
-          <p className="text-sm font-bold text-blue-900">ยอดเงินที่ต้องชำระ: {price} บาท</p>
-          <p className="text-[10px] text-gray-400 mt-1">ชื่อบัญชี: 097-239-6095</p>
+    {/* จุดที่แก้: ใช้ flex items-center และ justify-center เพื่อให้กล่อง QR อยู่กลางเป๊ะ */}
+    <div className="flex justify-center mb-4">
+      <div className="bg-white p-4 rounded-xl shadow-md w-fit">
+        <div className="w-64 h-auto bg-white rounded-lg flex flex-col items-center justify-center">
+          {/* ดึงรูป QR ตามราคาที่คำนวณได้จริง (375 หรือ 750) */}
+          <img 
+            src={`https://promptpay.io/0972396095/${price}.png`} 
+            alt="PromptPay QR Code" 
+            className="w-full h-auto rounded-lg mb-2"
+          />
+          <div className="text-center">
+            <p className="text-sm font-bold text-blue-900">ยอดเงินที่ต้องชำระ: {price} บาท</p>
+            <p className="text-[10px] text-gray-400 mt-1">ชื่อบัญชี: 097-239-6095</p>
+          </div>
         </div>
       </div>
     </div>
 
-    <div className="text-center mb-4 p-3 bg-white rounded-lg border border-blue-100">
+    <div className="text-center mb-4 p-3 bg-white rounded-lg border border-blue-100 max-w-[280px] mx-auto">
       <p className="text-sm text-gray-600">หรือโอนไปที่เบอร์โทรศัพท์</p>
       <p className="font-mono font-bold text-xl text-blue-800">097-239-6095</p>
       <p className="text-sm text-gray-600">พร้อมเพย์ (PromptPay)</p>
     </div>
+  </div>
+)}
 
     <label className="block">
       <span className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
