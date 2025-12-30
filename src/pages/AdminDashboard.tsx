@@ -33,15 +33,28 @@ export default function AdminDashboard() {
   const [rounds, setRounds] = useState<ExamRound[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  
   const [newRound, setNewRound] = useState({ exam_date: '', exam_time: 'Morning', max_seats: 30 });
 
+  // --- 1. ระบบรักษาความปลอดภัยและดึงข้อมูลครั้งแรก ---
   useEffect(() => {
-    fetchData();
+    const initDashboard = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // ⚠️ สำคัญ: เปลี่ยนเป็นอีเมลของมึงเอง ⚠️
+      if (!session || session.user.email !== 'your-admin@email.com') {
+        alert("มึงไม่ใช่แอดมิน! ออกไป๊!");
+        window.location.href = '/'; 
+        return;
+      }
+
+      await fetchData(); 
+    };
+    initDashboard();
   }, []);
 
+  // --- 2. ฟังก์ชันดึงข้อมูลกลาง ---
   const fetchData = async () => {
-    setLoading(true);
     try {
       const [bookingsResult, roundsResult] = await Promise.all([
         supabase.from('bookings').select(`*, exam_round:exam_rounds(exam_date, exam_time)`).order('created_at', { ascending: false }),
@@ -56,6 +69,7 @@ export default function AdminDashboard() {
     }
   };
 
+  // --- 3. ฟังก์ชันจัดการรอบสอบ ---
   const addRound = async () => {
     if (!newRound.exam_date) return alert('กรุณาเลือกวันที่');
     const { error } = await supabase.from('exam_rounds').insert([{
@@ -64,10 +78,7 @@ export default function AdminDashboard() {
       is_active: true
     }]);
     if (error) alert(error.message);
-    else { 
-      alert('เพิ่มรอบสอบสำเร็จ!'); 
-      fetchData(); 
-    }
+    else { alert('เพิ่มรอบสอบสำเร็จ!'); fetchData(); }
   };
 
   const deleteRound = async (id: string) => {
@@ -77,11 +88,10 @@ export default function AdminDashboard() {
     else fetchData();
   };
 
-  // แก้ไขส่วนการอัปเดตสถานะและบวกที่นั่ง
+  // --- 4. ฟังก์ชันอนุมัติการชำระเงินและจัดการที่นั่ง ---
   const updatePaymentStatus = async (bookingId: string, status: string, roundId: string) => {
     setLoading(true);
     try {
-      // 1. อัปเดตสถานะการจอง
       const { error: updateError } = await supabase
         .from('bookings')
         .update({
@@ -92,7 +102,7 @@ export default function AdminDashboard() {
 
       if (updateError) throw updateError;
 
-      // 2. ถ้าอนุมัติสำเร็จ (verified) ให้ไปบวก current_seats ในรอบนั้น
+      // ถ้าแอดมินกดอนุมัติ (verified) ให้ไปบวกที่นั่งในรอบนั้น 1 ที่
       if (status === 'verified') {
         const round = rounds.find(r => r.id === roundId);
         const newCount = (round?.current_seats || 0) + 1;
@@ -236,7 +246,6 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   
-                  {/* ปุ่มดูหลักฐาน */}
                   <div className="flex flex-wrap gap-4 mt-4">
                     {booking.payment_slip_url && (
                       <a href={booking.payment_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-blue-600 font-medium hover:underline">
