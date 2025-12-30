@@ -35,25 +35,24 @@ export default function AdminDashboard() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [newRound, setNewRound] = useState({ exam_date: '', exam_time: 'Morning', max_seats: 30 });
 
-  // --- 1. ระบบรักษาความปลอดภัยและดึงข้อมูลครั้งแรก ---
+  // ⚠️ รายชื่อแอดมิน (เพิ่มตรงนี้ได้เลยมึง)
+  const allowedEmails = ['bass.chinz@gmail.com', 'your-admin@email.com'];
+
   useEffect(() => {
     const initDashboard = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       
-      // ⚠️ สำคัญ: เปลี่ยนเป็นอีเมลของมึงเอง ⚠️
-      if (!session || session.user.email !== 'your-admin@email.com') {
+      if (!session || !allowedEmails.includes(session.user.email?.toLowerCase() || '')) {
         alert("มึงไม่ใช่แอดมิน! ออกไป๊!");
         window.location.href = '/'; 
         return;
       }
-
       await fetchData(); 
     };
     initDashboard();
   }, []);
 
-  // --- 2. ฟังก์ชันดึงข้อมูลกลาง ---
   const fetchData = async () => {
     try {
       const [bookingsResult, roundsResult] = await Promise.all([
@@ -69,14 +68,9 @@ export default function AdminDashboard() {
     }
   };
 
-  // --- 3. ฟังก์ชันจัดการรอบสอบ ---
   const addRound = async () => {
     if (!newRound.exam_date) return alert('กรุณาเลือกวันที่');
-    const { error } = await supabase.from('exam_rounds').insert([{
-      ...newRound,
-      current_seats: 0,
-      is_active: true
-    }]);
+    const { error } = await supabase.from('exam_rounds').insert([{ ...newRound, current_seats: 0, is_active: true }]);
     if (error) alert(error.message);
     else { alert('เพิ่มรอบสอบสำเร็จ!'); fetchData(); }
   };
@@ -88,37 +82,52 @@ export default function AdminDashboard() {
     else fetchData();
   };
 
-  // --- 4. ฟังก์ชันอนุมัติการชำระเงินและจัดการที่นั่ง ---
   const updatePaymentStatus = async (bookingId: string, status: string, roundId: string) => {
     setLoading(true);
     try {
       const { error: updateError } = await supabase
         .from('bookings')
-        .update({
-          payment_status: status,
-          confirmed_at: status === 'verified' ? new Date().toISOString() : null
-        })
+        .update({ payment_status: status, confirmed_at: status === 'verified' ? new Date().toISOString() : null })
         .eq('id', bookingId);
 
       if (updateError) throw updateError;
 
-      // ถ้าแอดมินกดอนุมัติ (verified) ให้ไปบวกที่นั่งในรอบนั้น 1 ที่
       if (status === 'verified') {
         const round = rounds.find(r => r.id === roundId);
-        const newCount = (round?.current_seats || 0) + 1;
-        
-        const { error: roundError } = await supabase
-          .from('exam_rounds')
-          .update({ current_seats: newCount })
-          .eq('id', roundId);
-          
-        if (roundError) throw roundError;
+        await supabase.from('exam_rounds').update({ current_seats: (round?.current_seats || 0) + 1 }).eq('id', roundId);
       }
 
       alert('ดำเนินการสำเร็จ');
       await fetchData();
     } catch (error: any) {
       alert('เกิดข้อผิดพลาด: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- ฟังก์ชันลบรายการจอง (Delete & Refund Seat) ---
+  const deleteBooking = async (booking: Booking) => {
+    if (!confirm(`ยืนยันการลบรายการของ ${booking.full_name}?`)) return;
+    setLoading(true);
+    try {
+      // 1. ถ้าคนที่จะลบมีสถานะ verified ต้องไปลบเลขที่นั่งในรอบนั้นออก 1 ที่ก่อน
+      if (booking.payment_status === 'verified') {
+        const round = rounds.find(r => r.id === booking.exam_round_id);
+        if (round) {
+          const newCount = Math.max(0, (round.current_seats || 0) - 1);
+          await supabase.from('exam_rounds').update({ current_seats: newCount }).eq('id', booking.exam_round_id);
+        }
+      }
+
+      // 2. ลบข้อมูลจากตาราง bookings
+      const { error } = await supabase.from('bookings').delete().eq('id', booking.id);
+      if (error) throw error;
+
+      alert('ลบรายการสำเร็จ (คืนที่นั่งให้รอบสอบแล้วถ้าเคยอนุมัติไว้)');
+      await fetchData();
+    } catch (error: any) {
+      alert('ลบไม่สำเร็จ: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -147,8 +156,6 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Header & Stats */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-800">ระบบจัดการการจอง</h1>
@@ -156,23 +163,23 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <div className="bg-blue-50 p-4 rounded-xl">
+            <div className="bg-blue-50 p-4 rounded-xl text-center md:text-left">
               <div className="flex items-center gap-2 mb-2"><Users className="w-5 h-5 text-blue-600" /><p className="text-sm text-gray-600">ทั้งหมด</p></div>
               <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
             </div>
-            <div className="bg-yellow-50 p-4 rounded-xl">
+            <div className="bg-yellow-50 p-4 rounded-xl text-center md:text-left">
               <div className="flex items-center gap-2 mb-2"><Clock className="w-5 h-5 text-yellow-600" /><p className="text-sm text-gray-600">รอตรวจสอบ</p></div>
               <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-xl">
+            <div className="bg-green-50 p-4 rounded-xl text-center md:text-left">
               <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-600" /><p className="text-sm text-gray-600">ยืนยันแล้ว</p></div>
               <p className="text-2xl font-bold text-green-600">{stats.verified}</p>
             </div>
-            <div className="bg-red-50 p-4 rounded-xl">
+            <div className="bg-red-50 p-4 rounded-xl text-center md:text-left">
               <div className="flex items-center gap-2 mb-2"><XCircle className="w-5 h-5 text-red-600" /><p className="text-sm text-gray-600">ปฏิเสธ</p></div>
               <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-xl">
+            <div className="bg-purple-50 p-4 rounded-xl text-center md:text-left">
               <div className="flex items-center gap-2 mb-2"><Calendar className="w-5 h-5 text-purple-600" /><p className="text-sm text-gray-600">รายได้</p></div>
               <p className="text-xl font-bold text-purple-600">{stats.revenue.toLocaleString()}฿</p>
             </div>
@@ -182,26 +189,26 @@ export default function AdminDashboard() {
           <div className="border-t pt-6 mb-6">
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus className="text-blue-600"/> เพิ่มรอบสอบใหม่</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <input type="date" className="border p-3 rounded-xl" onChange={e => setNewRound({...newRound, exam_date: e.target.value})} />
-              <select className="border p-3 rounded-xl" onChange={e => setNewRound({...newRound, exam_time: e.target.value})}>
+              <input type="date" className="border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setNewRound({...newRound, exam_date: e.target.value})} />
+              <select className="border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setNewRound({...newRound, exam_time: e.target.value})}>
                 <option value="Morning">เช้า (09:00-12:00)</option>
                 <option value="Afternoon">บ่าย (13:00-16:00)</option>
               </select>
-              <input type="number" placeholder="ที่นั่ง" className="border p-3 rounded-xl" onChange={e => setNewRound({...newRound, max_seats: parseInt(e.target.value)})} />
-              <button onClick={addRound} className="bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition">เพิ่มรอบสอบ</button>
+              <input type="number" placeholder="ที่นั่ง" className="border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setNewRound({...newRound, max_seats: parseInt(e.target.value)})} />
+              <button onClick={addRound} className="bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-md">เพิ่มรอบสอบ</button>
             </div>
           </div>
 
           {/* สถานะรอบสอบ */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">สถานะรอบสอบ</h2>
-            <div className="grid md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {rounds.map(round => (
                 <div key={round.id} className="bg-gray-50 p-4 rounded-lg border relative group">
-                  <button onClick={() => deleteRound(round.id)} className="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 transition"><Trash2 size={16}/></button>
+                  <button onClick={() => deleteRound(round.id)} className="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 transition hover:text-red-600"><Trash2 size={16}/></button>
                   <p className="font-semibold text-gray-800">{new Date(round.exam_date).toLocaleDateString('th-TH')}</p>
-                  <p className="text-sm text-gray-600 mb-2">{round.exam_time === 'Morning' ? 'เช้า' : 'บ่าย'}</p>
-                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider">
+                  <p className="text-sm text-gray-600 mb-2">{round.exam_time === 'Morning' ? 'เช้า (09:00-12:00)' : 'บ่าย (13:00-16:00)'}</p>
+                  <div className="flex items-center justify-between text-xs font-bold">
                     <span>{round.current_seats}/{round.max_seats} ที่นั่ง</span>
                     <span className={round.is_active ? 'text-green-600' : 'text-gray-400'}>{round.is_active ? 'เปิดอยู่' : 'ปิด'}</span>
                   </div>
@@ -212,10 +219,9 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Filter & Booking List */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
           {['all', 'pending', 'verified', 'rejected'].map((s) => (
-            <button key={s} onClick={() => setFilterStatus(s)} className={`px-4 py-2 rounded-lg font-medium transition ${filterStatus === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+            <button key={s} onClick={() => setFilterStatus(s)} className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition ${filterStatus === s ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-200 shadow-sm border'}`}>
               {s === 'all' ? 'ทั้งหมด' : s === 'pending' ? 'รอตรวจสอบ' : s === 'verified' ? 'ยืนยันแล้ว' : 'ปฏิเสธ'}
             </button>
           ))}
@@ -223,7 +229,7 @@ export default function AdminDashboard() {
 
         <div className="space-y-4">
           {bookings.filter(b => filterStatus === 'all' || b.payment_status === filterStatus).map(booking => (
-            <div key={booking.id} className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
+            <div key={booking.id} className="bg-white rounded-xl shadow p-5 md:p-6 border-l-4 border-blue-500">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-3">
@@ -248,24 +254,26 @@ export default function AdminDashboard() {
                   
                   <div className="flex flex-wrap gap-4 mt-4">
                     {booking.payment_slip_url && (
-                      <a href={booking.payment_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-blue-600 font-medium hover:underline">
-                        <ExternalLink size={14}/> ดูสลิปโอนเงิน
-                      </a>
+                      <a href={booking.payment_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-blue-600 font-medium hover:underline"><ExternalLink size={14}/> ดูสลิป</a>
                     )}
                     {booking.id_card_url && (
-                      <a href={booking.id_card_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-orange-600 font-medium hover:underline">
-                        <CreditCard size={14}/> ดูบัตรพนักงาน/นักศึกษา
-                      </a>
+                      <a href={booking.id_card_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-orange-600 font-medium hover:underline"><CreditCard size={14}/> ดูบัตรพนักงาน/นักศึกษา</a>
                     )}
                   </div>
                 </div>
 
-                {booking.payment_status === 'pending' && (
-                  <div className="flex gap-2 shrink-0">
-                    <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 font-bold"><CheckCircle size={16}/> อนุมัติ</button>
-                    <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-bold"><XCircle size={16}/> ปฏิเสธ</button>
-                  </div>
-                )}
+                <div className="flex gap-2 items-center shrink-0 self-end md:self-start">
+                  {booking.payment_status === 'pending' && (
+                    <>
+                      <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-1 font-bold shadow-sm text-sm"><CheckCircle size={16}/> อนุมัติ</button>
+                      <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-1 font-bold shadow-sm text-sm"><XCircle size={16}/> ปฏิเสธ</button>
+                    </>
+                  )}
+                  {/* ปุ่มลบรายการจอง (มีตลอด) */}
+                  <button onClick={() => deleteBooking(booking)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบข้อมูลการจอง">
+                    <Trash2 size={20}/>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
