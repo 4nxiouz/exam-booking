@@ -35,8 +35,8 @@ export default function AdminDashboard() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [newRound, setNewRound] = useState({ exam_date: '', exam_time: 'Morning', max_seats: 30 });
 
-  // ⚠️ รายชื่อแอดมิน (เพิ่มตรงนี้ได้เลยมึง)
-  const allowedEmails = ['bass.chinz@gmail.com', 'your-admin@email.com'];
+  // ⚠️ รายชื่ออีเมลแอดมิน
+  const allowedEmails = ['bass.chinz@gmail.com', 'admin2@gmail.com', 'friend@gmail.com'];
 
   useEffect(() => {
     const initDashboard = async () => {
@@ -106,12 +106,10 @@ export default function AdminDashboard() {
     }
   };
 
-  // --- ฟังก์ชันลบรายการจอง (Delete & Refund Seat) ---
   const deleteBooking = async (booking: Booking) => {
-    if (!confirm(`ยืนยันการลบรายการของ ${booking.full_name}?`)) return;
+    if (!confirm(`ยืนยันการลบรายการของ ${booking.full_name}? ข้อมูลจะหายถาวร!`)) return;
     setLoading(true);
     try {
-      // 1. ถ้าคนที่จะลบมีสถานะ verified ต้องไปลบเลขที่นั่งในรอบนั้นออก 1 ที่ก่อน
       if (booking.payment_status === 'verified') {
         const round = rounds.find(r => r.id === booking.exam_round_id);
         if (round) {
@@ -119,12 +117,9 @@ export default function AdminDashboard() {
           await supabase.from('exam_rounds').update({ current_seats: newCount }).eq('id', booking.exam_round_id);
         }
       }
-
-      // 2. ลบข้อมูลจากตาราง bookings
       const { error } = await supabase.from('bookings').delete().eq('id', booking.id);
       if (error) throw error;
-
-      alert('ลบรายการสำเร็จ (คืนที่นั่งให้รอบสอบแล้วถ้าเคยอนุมัติไว้)');
+      alert('ลบรายการสำเร็จและคืนที่นั่งแล้ว');
       await fetchData();
     } catch (error: any) {
       alert('ลบไม่สำเร็จ: ' + error.message);
@@ -151,133 +146,148 @@ export default function AdminDashboard() {
     revenue: bookings.filter(b => b.payment_status === 'verified').reduce((sum, b) => sum + b.price, 0)
   };
 
-  if (loading && bookings.length === 0) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+  if (loading && bookings.length === 0) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Header & Stats */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">ระบบจัดการการจอง</h1>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 font-bold hover:bg-red-50 px-4 py-2 rounded-xl transition"><LogOut size={18}/> ออกจากระบบ</button>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+            <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 font-bold hover:bg-red-50 px-4 py-2 rounded-xl transition">
+              <LogOut size={18}/> ออกจากระบบ
+            </button>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-            <div className="bg-blue-50 p-4 rounded-xl text-center md:text-left">
-              <div className="flex items-center gap-2 mb-2"><Users className="w-5 h-5 text-blue-600" /><p className="text-sm text-gray-600">ทั้งหมด</p></div>
-              <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+            <div className="bg-blue-50 p-4 rounded-xl">
+              <p className="text-xs text-blue-600 font-bold uppercase mb-1">ทั้งหมด</p>
+              <p className="text-2xl font-black text-blue-700">{stats.total}</p>
             </div>
-            <div className="bg-yellow-50 p-4 rounded-xl text-center md:text-left">
-              <div className="flex items-center gap-2 mb-2"><Clock className="w-5 h-5 text-yellow-600" /><p className="text-sm text-gray-600">รอตรวจสอบ</p></div>
-              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+            <div className="bg-yellow-50 p-4 rounded-xl">
+              <p className="text-xs text-yellow-600 font-bold uppercase mb-1">รอตรวจ</p>
+              <p className="text-2xl font-black text-yellow-700">{stats.pending}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded-xl text-center md:text-left">
-              <div className="flex items-center gap-2 mb-2"><CheckCircle className="w-5 h-5 text-green-600" /><p className="text-sm text-gray-600">ยืนยันแล้ว</p></div>
-              <p className="text-2xl font-bold text-green-600">{stats.verified}</p>
+            <div className="bg-green-50 p-4 rounded-xl">
+              <p className="text-xs text-green-600 font-bold uppercase mb-1">ยืนยันแล้ว</p>
+              <p className="text-2xl font-black text-green-700">{stats.verified}</p>
             </div>
-            <div className="bg-red-50 p-4 rounded-xl text-center md:text-left">
-              <div className="flex items-center gap-2 mb-2"><XCircle className="w-5 h-5 text-red-600" /><p className="text-sm text-gray-600">ปฏิเสธ</p></div>
-              <p className="text-2xl font-bold text-red-600">{stats.rejected}</p>
+            <div className="bg-red-50 p-4 rounded-xl">
+              <p className="text-xs text-red-600 font-bold uppercase mb-1">ปฏิเสธ</p>
+              <p className="text-2xl font-black text-red-700">{stats.rejected}</p>
             </div>
-            <div className="bg-purple-50 p-4 rounded-xl text-center md:text-left">
-              <div className="flex items-center gap-2 mb-2"><Calendar className="w-5 h-5 text-purple-600" /><p className="text-sm text-gray-600">รายได้</p></div>
-              <p className="text-xl font-bold text-purple-600">{stats.revenue.toLocaleString()}฿</p>
+            <div className="bg-purple-50 p-4 rounded-xl">
+              <p className="text-xs text-purple-600 font-bold uppercase mb-1">รายได้</p>
+              <p className="text-xl font-black text-purple-700">{stats.revenue.toLocaleString()}฿</p>
             </div>
           </div>
 
-          {/* ฟอร์มเพิ่มรอบสอบ */}
+          {/* Manage Exam Rounds */}
           <div className="border-t pt-6 mb-6">
-            <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus className="text-blue-600"/> เพิ่มรอบสอบใหม่</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus className="text-blue-600"/> จัดการรอบสอบ</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <input type="date" className="border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setNewRound({...newRound, exam_date: e.target.value})} />
               <select className="border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setNewRound({...newRound, exam_time: e.target.value})}>
                 <option value="Morning">เช้า (09:00-12:00)</option>
                 <option value="Afternoon">บ่าย (13:00-16:00)</option>
               </select>
               <input type="number" placeholder="ที่นั่ง" className="border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setNewRound({...newRound, max_seats: parseInt(e.target.value)})} />
-              <button onClick={addRound} className="bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-md">เพิ่มรอบสอบ</button>
+              <button onClick={addRound} className="bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-md">เพิ่มรอบ</button>
             </div>
-          </div>
 
-          {/* สถานะรอบสอบ */}
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-3">สถานะรอบสอบ</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {rounds.map(round => (
-                <div key={round.id} className="bg-gray-50 p-4 rounded-lg border relative group">
-                  <button onClick={() => deleteRound(round.id)} className="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 transition hover:text-red-600"><Trash2 size={16}/></button>
-                  <p className="font-semibold text-gray-800">{new Date(round.exam_date).toLocaleDateString('th-TH')}</p>
-                  <p className="text-sm text-gray-600 mb-2">{round.exam_time === 'Morning' ? 'เช้า (09:00-12:00)' : 'บ่าย (13:00-16:00)'}</p>
-                  <div className="flex items-center justify-between text-xs font-bold">
+                <div key={round.id} className="bg-white p-4 rounded-xl border relative group shadow-sm">
+                  <button onClick={() => deleteRound(round.id)} className="absolute top-2 right-2 text-gray-300 opacity-0 group-hover:opacity-100 transition hover:text-red-500">
+                    <Trash2 size={16}/>
+                  </button>
+                  <p className="font-bold text-gray-800">{new Date(round.exam_date).toLocaleDateString('th-TH')}</p>
+                  <p className="text-sm text-gray-500 mb-2">{round.exam_time === 'Morning' ? 'เช้า 09:00' : 'บ่าย 13:00'}</p>
+                  <div className="flex justify-between text-xs font-bold mb-1">
                     <span>{round.current_seats}/{round.max_seats} ที่นั่ง</span>
-                    <span className={round.is_active ? 'text-green-600' : 'text-gray-400'}>{round.is_active ? 'เปิดอยู่' : 'ปิด'}</span>
+                    <span className={round.is_active ? 'text-green-500' : 'text-gray-400'}>{round.is_active ? 'Active' : 'Closed'}</span>
                   </div>
-                  <div className="mt-2 bg-gray-200 rounded-full h-1.5"><div className="bg-blue-600 h-1.5 rounded-full transition-all" style={{ width: `${(round.current_seats / round.max_seats) * 100}%` }} /></div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (round.current_seats / round.max_seats) * 100)}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
+        {/* Bookings List Filter */}
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
           {['all', 'pending', 'verified', 'rejected'].map((s) => (
-            <button key={s} onClick={() => setFilterStatus(s)} className={`whitespace-nowrap px-4 py-2 rounded-lg font-medium transition ${filterStatus === s ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-200 shadow-sm border'}`}>
-              {s === 'all' ? 'ทั้งหมด' : s === 'pending' ? 'รอตรวจสอบ' : s === 'verified' ? 'ยืนยันแล้ว' : 'ปฏิเสธ'}
+            <button key={s} onClick={() => setFilterStatus(s)} className={`whitespace-nowrap px-6 py-2 rounded-full font-bold transition shadow-sm border ${filterStatus === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+              {s === 'all' ? 'ทั้งหมด' : s === 'pending' ? 'รอตรวจ' : s === 'verified' ? 'ยืนยันแล้ว' : 'ปฏิเสธ'}
             </button>
           ))}
         </div>
 
+        {/* Booking Cards */}
         <div className="space-y-4">
           {bookings.filter(b => filterStatus === 'all' || b.payment_status === filterStatus).map(booking => (
-            <div key={booking.id} className="bg-white rounded-xl shadow p-5 md:p-6 border-l-4 border-blue-500">
-              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-2xl font-bold text-blue-600">{booking.booking_code}</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      booking.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 
-                      booking.payment_status === 'rejected' ? 'bg-red-100 text-red-700' : 
-                      'bg-yellow-100 text-yellow-700'}`}>
-                      {booking.payment_status === 'verified' ? 'ยืนยันแล้ว' : booking.payment_status === 'rejected' ? 'ปฏิเสธแล้ว' : 'รอตรวจสอบ'}
-                    </span>
+            <div key={booking.id} className="bg-white rounded-2xl shadow-sm p-5 border-l-8 border-blue-500 flex flex-col md:flex-row justify-between gap-6">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-2xl font-black text-gray-800">{booking.booking_code}</span>
+                  <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
+                    booking.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 
+                    booking.payment_status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {booking.payment_status === 'verified' ? 'ยืนยันแล้ว' : booking.payment_status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}
+                  </span>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                  <div>
+                    <p className="text-gray-400 uppercase text-[10px] font-bold">ผู้สมัคร</p>
+                    <p className="font-bold text-gray-800">{booking.full_name}</p>
+                    <p className="text-gray-500">{booking.email} | {booking.phone}</p>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="font-bold text-gray-800">{booking.full_name}</p>
-                      <p className="text-gray-600">{booking.email} | {booking.phone}</p>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-800">รอบ: {new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH')}</p>
-                      <p className="text-gray-600">{getUserTypeLabel(booking.user_type)} - {booking.price}฿ ({booking.payment_method === 'walkin' ? 'จ่ายหน้างาน' : 'โอนเงิน'})</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-4 mt-4">
-                    {booking.payment_slip_url && (
-                      <a href={booking.payment_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-blue-600 font-medium hover:underline"><ExternalLink size={14}/> ดูสลิป</a>
-                    )}
-                    {booking.id_card_url && (
-                      <a href={booking.id_card_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-orange-600 font-medium hover:underline"><CreditCard size={14}/> ดูบัตรพนักงาน/นักศึกษา</a>
-                    )}
+                  <div>
+                    <p className="text-gray-400 uppercase text-[10px] font-bold">รอบสอบ</p>
+                    <p className="font-bold text-gray-800">{new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH')}</p>
+                    <p className="text-gray-500">{getUserTypeLabel(booking.user_type)} - {booking.price}฿</p>
                   </div>
                 </div>
 
-                <div className="flex gap-2 items-center shrink-0 self-end md:self-start">
-                  {booking.payment_status === 'pending' && (
-                    <>
-                      <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-1 font-bold shadow-sm text-sm"><CheckCircle size={16}/> อนุมัติ</button>
-                      <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-1 font-bold shadow-sm text-sm"><XCircle size={16}/> ปฏิเสธ</button>
-                    </>
+                <div className="flex flex-wrap gap-3 mt-4">
+                  {booking.payment_slip_url && (
+                    <a href={booking.payment_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition"><ExternalLink size={14}/> สลิปโอนเงิน</a>
                   )}
-                  {/* ปุ่มลบรายการจอง (มีตลอด) */}
-                  <button onClick={() => deleteBooking(booking)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="ลบข้อมูลการจอง">
-                    <Trash2 size={20}/>
-                  </button>
+                  {booking.id_card_url && (
+                    <a href={booking.id_card_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition"><CreditCard size={14}/> บัตรประจำตัว</a>
+                  )}
                 </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex md:flex-col justify-end gap-2 border-t md:border-t-0 pt-4 md:pt-0">
+                {booking.payment_status === 'pending' && (
+                  <>
+                    <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="flex-1 md:flex-none px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 font-bold text-sm transition">อนุมัติ</button>
+                    <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="flex-1 md:flex-none px-4 py-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 font-bold text-sm transition">ปฏิเสธ</button>
+                  </>
+                )}
+                {/* 🗑️ ปุ่มลบรายการ (เน้นสีแดงชัดๆ) */}
+                <button 
+                  onClick={() => deleteBooking(booking)} 
+                  className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition flex items-center justify-center gap-1"
+                  title="ลบข้อมูล"
+                >
+                  <Trash2 size={20}/>
+                  <span className="text-xs font-bold md:hidden">ลบรายการ</span>
+                </button>
               </div>
             </div>
           ))}
-          {bookings.length === 0 && !loading && <p className="text-center text-gray-500 py-10">ยังไม่มีข้อมูลการจอง</p>}
         </div>
       </div>
     </div>
