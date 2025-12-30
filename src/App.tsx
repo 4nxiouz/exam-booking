@@ -11,7 +11,11 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   // รายชื่ออีเมลที่มีสิทธิ์เข้าหลังบ้าน
-  const allowedEmails = ['bass.chinz@gmail.com']; 
+const allowedEmails = [
+  'bass.chinz@gmail.com', 
+  'admin2@gmail.com', 
+  'friend@gmail.com'
+];
 
   useEffect(() => {
     // เช็ค Session ครั้งแรก
