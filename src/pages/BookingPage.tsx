@@ -44,20 +44,21 @@ export default function BookingPage() {
   const isInternal = ['tg', 'wingspan', 'intern'].includes(userType);
   const price = isInternal ? 375 : 750;
 
-  const uploadFile = async (file: File, path: string) => {
+  // --- จุดที่แก้ไข: รับ bucketName เพิ่มเข้ามา ---
+  const uploadFile = async (file: File, bucketName: string) => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${path}-${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    // สร้างชื่อไฟล์ใหม่เพื่อไม่ให้ซ้ำกัน
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
     const { error } = await supabase.storage
-      .from('booking-files')
-      .upload(filePath, file);
+      .from(bucketName) // ใช้ bucketName ที่ส่งมา
+      .upload(fileName, file);
 
     if (error) throw error;
 
     const { data } = supabase.storage
-      .from('booking-files')
-      .getPublicUrl(filePath);
+      .from(bucketName)
+      .getPublicUrl(fileName);
 
     return data.publicUrl;
   };
@@ -82,12 +83,13 @@ export default function BookingPage() {
       let idCardUrl = null;
       let paymentSlipUrl = null;
 
+      // --- จุดที่แก้ไข: แยก Bucket ตามประเภทไฟล์ ---
       if (isInternal && idCardFile) {
-        idCardUrl = await uploadFile(idCardFile, `id-card/${formData.email}`);
+        idCardUrl = await uploadFile(idCardFile, 'id-cards');
       }
 
       if (payMethod === 'transfer' && paymentSlipFile) {
-        paymentSlipUrl = await uploadFile(paymentSlipFile, `payment-slip/${formData.email}`);
+        paymentSlipUrl = await uploadFile(paymentSlipFile, 'payment-slips');
       }
 
       const { data: booking, error } = await supabase
@@ -113,13 +115,12 @@ export default function BookingPage() {
       setSuccess(true);
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error detail:', error);
       alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
     } finally {
       setLoading(false);
     }
   };
-
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
