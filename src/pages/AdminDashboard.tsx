@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, Clock, ExternalLink, Calendar, Users, Plus, Trash2, LogOut } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, ExternalLink, Calendar, Users, Plus, Trash2, LogOut, CreditCard } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -34,7 +34,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   
-  // State สำหรับเพิ่มรอบสอบใหม่
   const [newRound, setNewRound] = useState({ exam_date: '', exam_time: 'Morning', max_seats: 30 });
 
   useEffect(() => {
@@ -43,20 +42,32 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [bookingsResult, roundsResult] = await Promise.all([
-      supabase.from('bookings').select(`*, exam_round:exam_rounds(exam_date, exam_time)`).order('created_at', { ascending: false }),
-      supabase.from('exam_rounds').select('*').order('exam_date', { ascending: true })
-    ]);
-    setBookings(bookingsResult.data || []);
-    setRounds(roundsResult.data || []);
-    setLoading(false);
+    try {
+      const [bookingsResult, roundsResult] = await Promise.all([
+        supabase.from('bookings').select(`*, exam_round:exam_rounds(exam_date, exam_time)`).order('created_at', { ascending: false }),
+        supabase.from('exam_rounds').select('*').order('exam_date', { ascending: true })
+      ]);
+      setBookings(bookingsResult.data || []);
+      setRounds(roundsResult.data || []);
+    } catch (error) {
+      console.error("Fetch Error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addRound = async () => {
     if (!newRound.exam_date) return alert('กรุณาเลือกวันที่');
-    const { error } = await supabase.from('exam_rounds').insert([newRound]);
+    const { error } = await supabase.from('exam_rounds').insert([{
+      ...newRound,
+      current_seats: 0,
+      is_active: true
+    }]);
     if (error) alert(error.message);
-    else { alert('เพิ่มรอบสอบสำเร็จ!'); fetchData(); }
+    else { 
+      alert('เพิ่มรอบสอบสำเร็จ!'); 
+      fetchData(); 
+    }
   };
 
   const deleteRound = async (id: string) => {
@@ -66,17 +77,41 @@ export default function AdminDashboard() {
     else fetchData();
   };
 
+  // แก้ไขส่วนการอัปเดตสถานะและบวกที่นั่ง
   const updatePaymentStatus = async (bookingId: string, status: string, roundId: string) => {
-    const { error } = await supabase.from('bookings').update({
-      payment_status: status,
-      confirmed_at: status === 'verified' ? new Date().toISOString() : null
-    }).eq('id', bookingId);
+    setLoading(true);
+    try {
+      // 1. อัปเดตสถานะการจอง
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({
+          payment_status: status,
+          confirmed_at: status === 'verified' ? new Date().toISOString() : null
+        })
+        .eq('id', bookingId);
 
-    if (!error && status === 'verified') {
-      const round = rounds.find(r => r.id === roundId);
-      await supabase.from('exam_rounds').update({ current_seats: (round?.current_seats || 0) + 1 }).eq('id', roundId);
+      if (updateError) throw updateError;
+
+      // 2. ถ้าอนุมัติสำเร็จ (verified) ให้ไปบวก current_seats ในรอบนั้น
+      if (status === 'verified') {
+        const round = rounds.find(r => r.id === roundId);
+        const newCount = (round?.current_seats || 0) + 1;
+        
+        const { error: roundError } = await supabase
+          .from('exam_rounds')
+          .update({ current_seats: newCount })
+          .eq('id', roundId);
+          
+        if (roundError) throw roundError;
+      }
+
+      alert('ดำเนินการสำเร็จ');
+      await fetchData();
+    } catch (error: any) {
+      alert('เกิดข้อผิดพลาด: ' + error.message);
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   };
 
   const handleLogout = async () => {
@@ -97,13 +132,13 @@ export default function AdminDashboard() {
     revenue: bookings.filter(b => b.payment_status === 'verified').reduce((sum, b) => sum + b.price, 0)
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
+  if (loading && bookings.length === 0) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         
-        {/* Header & Stats (ของเดิมมึง) */}
+        {/* Header & Stats */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-800">ระบบจัดการการจอง</h1>
@@ -133,7 +168,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* ฟอร์มเพิ่มรอบสอบ (เพิ่มใหม่) */}
+          {/* ฟอร์มเพิ่มรอบสอบ */}
           <div className="border-t pt-6 mb-6">
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Plus className="text-blue-600"/> เพิ่มรอบสอบใหม่</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -147,7 +182,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* รายชื่อรอบสอบ (ของเดิมมึง แต่เพิ่มปุ่มลบ) */}
+          {/* สถานะรอบสอบ */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold mb-3">สถานะรอบสอบ</h2>
             <div className="grid md:grid-cols-3 gap-3">
@@ -167,43 +202,65 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Filter & Booking List (ของเดิมมึงเป๊ะๆ) */}
+        {/* Filter & Booking List */}
         <div className="flex gap-2 mb-4">
-          {['all', 'pending', 'verified'].map((s) => (
+          {['all', 'pending', 'verified', 'rejected'].map((s) => (
             <button key={s} onClick={() => setFilterStatus(s)} className={`px-4 py-2 rounded-lg font-medium transition ${filterStatus === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-              {s === 'all' ? 'ทั้งหมด' : s === 'pending' ? 'รอตรวจสอบ' : 'ยืนยันแล้ว'}
+              {s === 'all' ? 'ทั้งหมด' : s === 'pending' ? 'รอตรวจสอบ' : s === 'verified' ? 'ยืนยันแล้ว' : 'ปฏิเสธ'}
             </button>
           ))}
         </div>
 
         <div className="space-y-4">
           {bookings.filter(b => filterStatus === 'all' || b.payment_status === filterStatus).map(booking => (
-            <div key={booking.id} className="bg-white rounded-xl shadow p-6">
+            <div key={booking.id} className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-2xl font-bold text-blue-600">{booking.booking_code}</span>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${booking.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {booking.payment_status === 'verified' ? 'ยืนยันแล้ว' : 'รอตรวจสอบ'}
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      booking.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 
+                      booking.payment_status === 'rejected' ? 'bg-red-100 text-red-700' : 
+                      'bg-yellow-100 text-yellow-700'}`}>
+                      {booking.payment_status === 'verified' ? 'ยืนยันแล้ว' : booking.payment_status === 'rejected' ? 'ปฏิเสธแล้ว' : 'รอตรวจสอบ'}
                     </span>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4 text-sm">
-                    <div><p className="font-semibold">{booking.full_name}</p><p className="text-gray-600">{booking.email} | {booking.phone}</p></div>
-                    <div><p className="font-semibold">{new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH')}</p><p className="text-gray-600">{getUserTypeLabel(booking.user_type)} - {booking.price}฿</p></div>
+                    <div>
+                      <p className="font-bold text-gray-800">{booking.full_name}</p>
+                      <p className="text-gray-600">{booking.email} | {booking.phone}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800">รอบ: {new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH')}</p>
+                      <p className="text-gray-600">{getUserTypeLabel(booking.user_type)} - {booking.price}฿ ({booking.payment_method === 'walkin' ? 'จ่ายหน้างาน' : 'โอนเงิน'})</p>
+                    </div>
                   </div>
-                  <div className="flex gap-3 mt-4">
-                    {booking.payment_slip_url && <a href={booking.payment_slip_url} target="_blank" className="flex items-center gap-1 text-sm text-blue-600 hover:underline"><ExternalLink size={14}/> สลิปโอนเงิน</a>}
+                  
+                  {/* ปุ่มดูหลักฐาน */}
+                  <div className="flex flex-wrap gap-4 mt-4">
+                    {booking.payment_slip_url && (
+                      <a href={booking.payment_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-blue-600 font-medium hover:underline">
+                        <ExternalLink size={14}/> ดูสลิปโอนเงิน
+                      </a>
+                    )}
+                    {booking.id_card_url && (
+                      <a href={booking.id_card_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-orange-600 font-medium hover:underline">
+                        <CreditCard size={14}/> ดูบัตรพนักงาน/นักศึกษา
+                      </a>
+                    )}
                   </div>
                 </div>
+
                 {booking.payment_status === 'pending' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"><CheckCircle size={16}/> อนุมัติ</button>
-                    <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2"><XCircle size={16}/> ปฏิเสธ</button>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={() => updatePaymentStatus(booking.id, 'verified', booking.exam_round_id)} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 font-bold"><CheckCircle size={16}/> อนุมัติ</button>
+                    <button onClick={() => updatePaymentStatus(booking.id, 'rejected', booking.exam_round_id)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-2 font-bold"><XCircle size={16}/> ปฏิเสธ</button>
                   </div>
                 )}
               </div>
             </div>
           ))}
+          {bookings.length === 0 && !loading && <p className="text-center text-gray-500 py-10">ยังไม่มีข้อมูลการจอง</p>}
         </div>
       </div>
     </div>
