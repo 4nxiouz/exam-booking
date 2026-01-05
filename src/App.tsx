@@ -6,7 +6,7 @@ import BookingPage from './pages/BookingPage';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 
-const ADMIN_EMAILS = ['4nxiouz@gmail.com', 'admin@example.com']; 
+const ADMIN_EMAILS = ['bass.chinz@gmail.com', 'admin2@gmail.com', 'friend@gmail.com'];
 
 function App() {
   const [session, setSession] = useState<any>(null);
