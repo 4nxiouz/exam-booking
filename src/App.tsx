@@ -7,7 +7,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 
 // รายชื่อ Email ที่ให้เป็น Admin (เปลี่ยนเป็นเมลมึงเลย)
-const ADMIN_EMAILS = ['4nxiouz@gmail.com', 'admin@example.com']; 
+const ADMIN_EMAILS = ['bass.chinz@gmail.com', 'admin@example.com']; 
 
 function App() {
   const [session, setSession] = useState<any>(null);
