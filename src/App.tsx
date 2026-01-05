@@ -16,14 +16,9 @@ function App() {
   useEffect(() => {
     let mounted = true;
 
-    // 1. ดึง Initial Session แบบรอบคอบ
     const initializeAuth = async () => {
       try {
-        if (!supabase) return;
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
-        if (error) throw error;
-
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
         if (mounted) {
           setSession(initialSession);
           if (initialSession?.user?.email) {
@@ -31,71 +26,65 @@ function App() {
           }
         }
       } catch (err) {
-        console.error("Auth initialization failed:", err);
+        console.error("Auth error:", err);
       } finally {
-        if (mounted) setLoading(false);
+        // 🚨 ถ้ามี hash access_token บน URL อย่าเพิ่งปิด loading 
+        // ให้รอ onAuthStateChange ทำงานให้เสร็จก่อน
+        if (mounted && !window.location.hash.includes('access_token')) {
+          setLoading(false);
+        }
       }
     };
 
     initializeAuth();
 
-    // 2. จัดการ Auth State Change (Login/Logout)
-    const { data: authListener } = supabase?.auth.onAuthStateChange((_event, currentSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (mounted) {
         setSession(currentSession);
         setIsAdmin(currentSession?.user?.email ? ADMIN_EMAILS.includes(currentSession.user.email.toLowerCase()) : false);
-        setLoading(false); // กันเหนียวเผื่อ getSession ช้า
+        setLoading(false); // ปิด loading ได้เมื่อ session นิ่งแล้ว
       }
-    }) || { data: { subscription: null } };
+    });
 
     return () => {
       mounted = false;
-      authListener?.subscription?.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  // --- โซนป้องกันหน้าขาว ---
-
-  // จังหวะโหลดให้โชว์ UI ง่ายๆ ไม่ต้องเรียก Component เยอะ
-  if (loading) {
+  // 1. ดักหน้าขาวตอนกำลังแลก Token จาก Google
+  if (loading || window.location.hash.includes('access_token')) {
     return (
       <div className="flex h-screen items-center justify-center bg-white font-sans text-gray-500">
         <div className="flex flex-col items-center gap-2">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p>กำลังเข้าสู่ระบบ...</p>
+          <p className="font-bold">กำลังยืนยันตัวตนกับ Google...</p>
         </div>
       </div>
     );
   }
 
-  // 🚨 หัวใจสำคัญ: ถ้าไม่มี session ให้โชว์หน้า Login ทันที (ไม่ต้องผ่าน Router)
-  // วิธีนี้แก้ปัญหา Redirect Loop ใน Incognito ได้ชัวร์ที่สุด
+  // 2. ถ้าไม่มี Session ให้โชว์หน้า Login
   if (!session) {
     return <Login />;
   }
 
-  // ถ้ามี Session แล้วค่อยอนุญาตให้เข้าถึงระบบ Routing หลัก
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 font-sans">
-        {/* ส่ง props ให้ Navbar ตรงๆ */}
         <Navbar session={session} isAdmin={isAdmin} />
         
         <main className="container mx-auto px-4 py-8">
           <Routes>
-            {/* หน้าหลักสำหรับคนมี Session */}
             <Route path="/" element={<BookingPage session={session} />} />
             
-            {/* หน้า Admin: เช็ค isAdmin อีกชั้น */}
+            {/* 🚨 ต้องส่ง session เข้าไปใน AdminDashboard ด้วย! */}
             <Route 
               path="/admin" 
-              element={isAdmin ? <AdminDashboard /> : <Navigate to="/" replace />} 
+              element={isAdmin ? <AdminDashboard session={session} /> : <Navigate to="/" replace />} 
             />
 
-            {/* หน้า Login: ถ้าหลุดมานี่ทั้งที่มี Session ให้ดีดไปหน้าแรก */}
             <Route path="/login" element={<Navigate to="/" replace />} />
-            
-            {/* เส้นทางอื่นๆ ให้ดีดกลับหน้าแรกหมด */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
