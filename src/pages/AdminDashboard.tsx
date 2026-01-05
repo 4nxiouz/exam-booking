@@ -1,139 +1,168 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { CheckCircle, XCircle, Clock, ExternalLink, Calendar, Users, Plus, Trash2, LogOut, CreditCard } from 'lucide-react';
+import { Check, X, ExternalLink, Users, Calendar, CreditCard, Search } from 'lucide-react';
+
+interface Booking {
+  id: string;
+  booking_code: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  user_type: string;
+  payment_status: string;
+  payment_slip_url: string;
+  id_card_url: string;
+  price: number;
+  created_at: string;
+  exam_rounds: {
+    exam_date: string;
+    exam_time: string;
+  };
+}
 
 export default function AdminDashboard({ session }: { session: any }) {
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [rounds, setRounds] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [newRound, setNewRound] = useState({ exam_date: '', exam_time: 'Morning', max_seats: 30 });
-
-  // 1. ฟังก์ชันอัปเดตสถานะ
-  const updatePaymentStatus = async (id: string, status: string) => {
-    try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({ payment_status: status })
-        .eq('id', id);
-      if (error) throw error;
-      await fetchData(); 
-      alert('อัปเดตสถานะสำเร็จแล้ว!');
-    } catch (error) {
-      console.error("Error:", error);
-      alert('อัปเดตไม่ได้ว่ะมึง!');
-    }
-  };
-
-  // 2. ฟังก์ชันดึงข้อมูล
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [bookingsResult, roundsResult] = await Promise.all([
-        supabase.from('bookings').select(`*, exam_round:exam_rounds(exam_date, exam_time)`).order('created_at', { ascending: false }),
-        supabase.from('exam_rounds').select('*').order('exam_date', { ascending: true })
-      ]);
-      setBookings(bookingsResult.data || []);
-      setRounds(roundsResult.data || []);
-    } catch (error) {
-      console.error("Fetch Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (session) fetchData();
-  }, [session]);
+    fetchBookings();
+  }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/';
+  const fetchBookings = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        exam_rounds (
+          exam_date,
+          exam_time
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) console.error(error);
+    else setBookings(data || []);
+    setLoading(false);
   };
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-    </div>
+  const updateStatus = async (id: string, status: 'verified' | 'pending') => {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ payment_status: status })
+      .eq('id', id);
+
+    if (error) alert('Error updating status');
+    else fetchBookings(); // Refresh ข้อมูล
+  };
+
+  const filteredBookings = bookings.filter(b => 
+    b.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    b.booking_code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-           <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
-           <p className="text-sm text-gray-500">{session?.user?.email}</p>
+    <div className="space-y-6">
+      {/* Header & Stats */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-800">Admin Management</h1>
+          <p className="text-gray-500">จัดการรายชื่อผู้สมัครและตรวจสอบยอดชำระเงิน</p>
         </div>
-
-        {/* Statistics Section */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-          <div className="bg-blue-50 p-4 rounded-xl">
-            <p className="text-xs text-blue-600 font-bold uppercase mb-1">ทั้งหมด</p>
-            <p className="text-2xl font-black text-blue-700">{bookings?.length || 0}</p>
-          </div>
-          <div className="bg-yellow-50 p-4 rounded-xl">
-            <p className="text-xs text-yellow-600 font-bold uppercase mb-1">รอตรวจ</p>
-            <p className="text-2xl font-black text-yellow-700">
-              {bookings?.filter(b => b.payment_status === 'pending').length || 0}
-            </p>
-          </div>
+        
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input 
+            type="text" 
+            placeholder="ค้นหาชื่อ หรือ รหัสการจอง..." 
+            className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-full md:w-64"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
+      </div>
 
-        {/* Booking Cards Section */}
-        <div className="space-y-4">
-          {bookings?.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <p className="text-gray-400 font-bold">ยังไม่มีข้อมูลการจองในระบบ</p>
-            </div>
-          ) : (
-            bookings
-              ?.filter(b => filterStatus === 'all' || b.payment_status === filterStatus)
-              .map(booking => (
-                <div key={booking.id} className="bg-white rounded-2xl shadow-sm p-5 border-l-8 border-blue-500 flex flex-col md:flex-row justify-between gap-6">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-2xl font-black text-gray-800">{booking?.booking_code || 'N/A'}</span>
-                      <span className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                        booking?.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 
-                        booking?.payment_status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {booking?.payment_status === 'verified' ? 'ยืนยันแล้ว' : booking?.payment_status === 'rejected' ? 'ปฏิเสธ' : 'รอตรวจสอบ'}
-                      </span>
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50 text-gray-600 text-sm font-bold">
+              <tr>
+                <th className="px-6 py-4">รหัส / วันที่จอง</th>
+                <th className="px-6 py-4">ผู้สมัคร</th>
+                <th className="px-6 py-4">รอบสอบ</th>
+                <th className="px-6 py-4">หลักฐาน</th>
+                <th className="px-6 py-4 text-center">สถานะ</th>
+                <th className="px-6 py-4 text-center">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400">กำลังโหลดข้อมูล...</td>
+                </tr>
+              ) : filteredBookings.map((b) => (
+                <tr key={b.id} className="hover:bg-blue-50/30 transition-colors">
+                  <td className="px-6 py-4">
+                    <span className="block font-bold text-blue-600">{b.booking_code}</span>
+                    <span className="text-xs text-gray-400">{new Date(b.created_at).toLocaleDateString('th-TH')}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="block font-semibold text-gray-800">{b.full_name}</span>
+                    <span className="text-xs text-gray-500">{b.phone}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(b.exam_rounds.exam_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                     </div>
-
-                    <div className="grid md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                      <div>
-                        <p className="text-gray-400 uppercase text-[10px] font-bold">ผู้สมัคร</p>
-                        <p className="font-bold text-gray-800">{booking?.full_name || 'ไม่ระบุชื่อ'}</p>
-                        <p className="text-gray-500">{booking?.email}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 uppercase text-[10px] font-bold">รอบสอบ</p>
-                        <p className="font-bold text-gray-800">
-                          {booking?.exam_round?.exam_date ? new Date(booking.exam_round.exam_date).toLocaleDateString('th-TH') : 'N/A'}
-                        </p>
-                      </div>
+                    <div className="text-xs text-gray-400 ml-5">{b.exam_rounds.exam_time}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex gap-2">
+                      {b.payment_slip_url && (
+                        <a href={b.payment_slip_url} target="_blank" rel="noreferrer" className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200" title="ดูสลิปโอนเงิน">
+                          <CreditCard className="w-4 h-4" />
+                        </a>
+                      )}
+                      {b.id_card_url && (
+                        <a href={b.id_card_url} target="_blank" rel="noreferrer" className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200" title="ดูบัตรพนักงาน">
+                          <Users className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
-                  </div>
-                  
-                  {/* ปุ่ม Action สำหรับ Admin */}
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => updatePaymentStatus(booking.id, 'verified')}
-                      className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100"
-                    >
-                      <CheckCircle size={20} />
-                    </button>
-                    <button 
-                      onClick={() => updatePaymentStatus(booking.id, 'rejected')}
-                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
-                    >
-                      <XCircle size={20} />
-                    </button>
-                  </div>
-                </div>
-              ))
-          )}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      b.payment_status === 'verified' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {b.payment_status === 'verified' ? 'ยืนยันแล้ว' : 'รอตรวจสอบ'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex justify-center gap-2">
+                      {b.payment_status === 'pending' ? (
+                        <button 
+                          onClick={() => updateStatus(b.id, 'verified')}
+                          className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => updateStatus(b.id, 'pending')}
+                          className="p-2 bg-gray-100 text-gray-400 rounded-lg hover:bg-gray-200"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
