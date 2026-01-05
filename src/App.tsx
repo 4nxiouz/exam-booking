@@ -29,7 +29,7 @@ function App() {
       } catch (err) {
         console.error("Auth error:", err);
       } finally {
-        // ถ้าไม่มี token ใน URL ให้ปิด loading ได้เลย
+        // ถ้าไม่มี token ใน URL (hash) ให้ปิด loading ได้เลย
         if (mounted && !window.location.hash.includes('access_token')) {
           setLoading(false);
         }
@@ -38,7 +38,7 @@ function App() {
 
     initializeAuth();
 
-    // ดักฟังการเปลี่ยนแปลงสถานะ Login
+    // ดักฟังการเปลี่ยนแปลงสถานะ Login (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (mounted) {
         setSession(currentSession);
@@ -72,18 +72,18 @@ function App() {
         
         <main className={session ? "container mx-auto px-4 py-8" : ""}>
           <Routes>
-            {/* Guest Route: ถ้ายังไม่ Login ให้ไปหน้า Login เท่านั้น */}
+            {/* 🛡️ กรณีที่ยังไม่ได้ Login */}
             {!session ? (
               <>
                 <Route path="/login" element={<Login />} />
+                {/* ถ้าพยายามไปหน้าอื่น ให้เด้งกลับไป Login */}
                 <Route path="*" element={<Navigate to="/login" replace />} />
               </>
             ) : (
-              /* Protected Routes: ต้อง Login แล้วเท่านั้น */
+              /* ✅ กรณีที่ Login แล้ว */
               <>
                 <Route path="/" element={<BookingPage session={session} />} />
                 
-                {/* Admin Route: เช็ค isAdmin อีกชั้นเพื่อความชัวร์ */}
                 <Route 
                   path="/admin" 
                   element={
@@ -95,7 +95,7 @@ function App() {
                   } 
                 />
 
-                {/* ถ้า Login แล้ว จะเข้าหน้า Login ไม่ได้ ให้เด้งไปหน้าแรก */}
+                {/* ถ้า Login แล้ว จะเข้าหน้า Login ซ้ำไม่ได้ ให้เด้งไปหน้าแรก */}
                 <Route path="/login" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>
