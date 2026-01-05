@@ -11,7 +11,6 @@ interface ExamRound {
   max_seats: number;
 }
 
-// เพิ่ม { session } เข้ามาใน Props
 export default function BookingPage({ session }: { session: any }) {
   const navigate = useNavigate();
   const [rounds, setRounds] = useState<ExamRound[]>([]);
@@ -24,20 +23,26 @@ export default function BookingPage({ session }: { session: any }) {
 
   const [formData, setFormData] = useState({
     fullName: '',
-    email: '', // จะถูกเติมอัตโนมัติจาก useEffect
+    email: '', 
     phone: ''
   });
 
   const [idCardFile, setIdCardFile] = useState<File | null>(null);
   const [paymentSlipFile, setPaymentSlipFile] = useState<File | null>(null);
 
-  // --- จุดที่แก้ไข: ดึง Email จาก Session มาใส่ Form อัตโนมัติ ---
+  // --- จุดที่ทำให้มัน Auto-fill เมลทันทีที่เปิดหน้า หรือ session เปลี่ยน ---
   useEffect(() => {
     fetchRounds();
-    if (session?.user?.email) {
-      setFormData(prev => ({ ...prev, email: session.user.email }));
+    
+    // ดึงเมลจาก session มาใส่ใน State ทันที
+    const userEmail = session?.user?.email;
+    if (userEmail) {
+      setFormData(prev => ({ 
+        ...prev, 
+        email: userEmail 
+      }));
     }
-  }, [session]);
+  }, [session]); // เฝ้าดู session ไว้ ถ้า login ปุ๊บ เมลต้องมาปั๊บ
 
   const fetchRounds = async () => {
     const { data } = await supabase
@@ -62,12 +67,16 @@ export default function BookingPage({ session }: { session: any }) {
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
-    // เช็คอีกรอบเพื่อความชัวร์
+    
     if (!session) {
       alert('กรุณาเข้าสู่ระบบก่อนทำการจองครับ');
       navigate('/login');
       return;
     }
+
+    // กันเหนียว: ใช้อีเมลจาก session โดยตรงตอนยิง API
+    const finalEmail = session.user.email;
+
     setLoading(true);
 
     try {
@@ -100,14 +109,14 @@ export default function BookingPage({ session }: { session: any }) {
           exam_round_id: selectedRound,
           user_type: userType,
           full_name: formData.fullName,
-          email: formData.email, // ใช้อีเมลจากที่ดึงมาจาก Session
+          email: finalEmail, // ใช้อีเมลจาก Google โดยตรง
           phone: formData.phone,
           price,
           payment_method: payMethod,
           id_card_url: idCardUrl,
           payment_slip_url: paymentSlipUrl,
           payment_status: payMethod === 'transfer' ? 'pending' : 'verified',
-          user_id: session.user.id // เพิ่มเพื่อเก็บว่าใครเป็นคนจอง
+          user_id: session.user.id
         })
         .select()
         .single();
@@ -147,7 +156,6 @@ export default function BookingPage({ session }: { session: any }) {
             onClick={() => {
               setSuccess(false);
               setSelectedRound('');
-              // ไม่รีเซ็ต email เพราะดึงจาก session อยู่แล้ว
               setFormData({ ...formData, fullName: '', phone: '' });
               setIdCardFile(null);
               setPaymentSlipFile(null);
@@ -164,21 +172,20 @@ export default function BookingPage({ session }: { session: any }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 py-8 px-4">
       <div className="max-w-2xl mx-auto">
-        {/* แสดงคำเตือนถ้าไม่ได้ Login */}
         {!session && (
-          <div className="mb-6 bg-orange-100 border-l-4 border-orange-500 p-4 rounded-r-xl flex justify-between items-center">
+          <div className="mb-6 bg-orange-100 border-l-4 border-orange-500 p-4 rounded-r-xl flex justify-between items-center animate-pulse">
             <div className="flex items-center gap-3">
               <AlertCircle className="text-orange-600" />
-              <p className="text-orange-700 font-medium">กรุณาเข้าสู่ระบบเพื่อดำเนินการจอง</p>
+              <p className="text-orange-700 font-bold">กรุณาเข้าสู่ระบบด้วย Google ก่อนจอง</p>
             </div>
-            <Link to="/login" className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md">Login</Link>
+            <Link to="/login" className="bg-orange-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-orange-700 transition">Login</Link>
           </div>
         )}
 
-        <div className={`bg-white rounded-2xl shadow-xl overflow-hidden ${!session ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`bg-white rounded-2xl shadow-xl overflow-hidden transition-all duration-500 ${!session ? 'opacity-40 grayscale pointer-events-none' : 'opacity-100'}`}>
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 text-white">
             <h1 className="text-3xl font-bold text-center">จองที่นั่งสอบ</h1>
-            <p className="text-center text-blue-100 mt-2">ระบบจองที่นั่งสอบออนไลน์</p>
+            <p className="text-center text-blue-100 mt-2 font-light">กรุณากรอกข้อมูลให้ครบถ้วน</p>
           </div>
 
           <form onSubmit={handleBooking} className="p-6 space-y-6">
@@ -192,47 +199,42 @@ export default function BookingPage({ session }: { session: any }) {
                   required
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="กรอกชื่อ-นามสกุล"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="ภาษาไทย หรือ ภาษาอังกฤษ"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  อีเมล (ระบบเติมให้) <Lock className="inline w-3 h-3 ml-1 text-gray-400" />
+                  อีเมล (Auto-fill) <Lock className="inline w-3 h-3 ml-1 text-blue-500" />
                 </label>
                 <input
                   type="email"
                   required
                   value={formData.email}
-                  readOnly // ล็อคไม่ให้แก้ไข
-                  className="w-full px-4 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg cursor-not-allowed shadow-inner"
-                  placeholder="กรุณา Login"
+                  readOnly
+                  className="w-full px-4 py-2 border border-blue-100 bg-blue-50 text-blue-700 rounded-lg cursor-not-allowed font-medium"
+                  placeholder="กรุณา Login ก่อน"
                 />
               </div>
             </div>
 
-            {/* --- ส่วนที่เหลือของ Form คุณใช้โค้ดเดิมได้เลยครับ --- */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                เบอร์โทรศัพท์ <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">เบอร์โทรศัพท์ <span className="text-red-500">*</span></label>
               <input
                 type="tel"
                 required
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="08X-XXX-XXXX"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="0XXXXXXXXX"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                ประเภทผู้สมัคร <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">ประเภทผู้สมัคร <span className="text-red-500">*</span></label>
               <select
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 value={userType}
                 onChange={(e) => setUserType(e.target.value)}
               >
@@ -244,7 +246,7 @@ export default function BookingPage({ session }: { session: any }) {
             </div>
 
             {isInternal && (
-              <div className="border-2 border-orange-200 bg-orange-50 p-4 rounded-xl">
+              <div className="border-2 border-dashed border-orange-300 bg-orange-50 p-4 rounded-xl">
                 <label className="block text-sm font-bold text-orange-700 mb-2 flex items-center gap-2">
                   <Upload className="w-4 h-4" />
                   แนบรูปบัตรพนักงาน / นักศึกษา <span className="text-red-500">*</span>
@@ -254,17 +256,15 @@ export default function BookingPage({ session }: { session: any }) {
                   required
                   accept="image/*"
                   onChange={(e) => setIdCardFile(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                  className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-orange-600 file:text-white hover:file:bg-orange-700"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                เลือกรอบสอบ <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">เลือกรอบสอบ <span className="text-red-500">*</span></label>
               <select
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 value={selectedRound}
                 onChange={(e) => setSelectedRound(e.target.value)}
                 required
@@ -272,55 +272,56 @@ export default function BookingPage({ session }: { session: any }) {
                 <option value="">-- กรุณาเลือกรอบ --</option>
                 {rounds.map(r => (
                   <option key={r.id} value={r.id} disabled={r.max_seats - r.current_seats <= 0}>
-                    {new Date(r.exam_date).toLocaleDateString('th-TH')} ({r.exam_time}) - ว่าง {r.max_seats - r.current_seats} ที่
+                    {new Date(r.exam_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} ({r.exam_time}) - ว่าง {r.max_seats - r.current_seats} ที่
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl text-center border-2 border-blue-200">
-              <span className="text-gray-700 font-medium">ค่าธรรมเนียมการสอบ</span>
-              <div className="text-4xl font-bold text-blue-600 mt-2">{price} บาท</div>
+            <div className="bg-blue-600 p-6 rounded-2xl text-center text-white shadow-lg">
+              <span className="text-blue-100 text-sm uppercase tracking-wider font-bold">ยอดเงินที่ต้องชำระ</span>
+              <div className="text-5xl font-black mt-1">{price}.-</div>
             </div>
 
             <div className="space-y-3">
-              <label className="block text-sm font-semibold text-gray-700">ช่องทางการชำระเงิน *</label>
+              <label className="block text-sm font-semibold text-gray-700">ช่องทางการชำระเงิน <span className="text-red-500">*</span></label>
               <div className="grid grid-cols-2 gap-4">
-                <label className={`flex items-center justify-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${payMethod === 'transfer' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+                <label className={`flex items-center justify-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${payMethod === 'transfer' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}>
                   <input type="radio" checked={payMethod === 'transfer'} onChange={() => setPayMethod('transfer')} className="hidden" />
-                  <span className="font-medium">โอนเงิน</span>
+                  <span className="font-bold">โอนเงิน (PromptPay)</span>
                 </label>
-                <label className={`flex items-center justify-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition ${payMethod === 'walkin' ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+                <label className={`flex items-center justify-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all ${payMethod === 'walkin' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}>
                   <input type="radio" checked={payMethod === 'walkin'} onChange={() => setPayMethod('walkin')} className="hidden" />
-                  <span className="font-medium">จ่ายหน้างาน</span>
+                  <span className="font-bold">จ่ายหน้างาน</span>
                 </label>
               </div>
             </div>
 
             {payMethod === 'transfer' && (
-              <div className="p-4 border-2 border-blue-100 rounded-xl space-y-4">
-                <div className="flex justify-center">
-                   <img src={`https://promptpay.io/0972396095/${price}.png`} alt="QR" className="w-48 h-48" />
+              <div className="p-4 border-2 border-blue-200 rounded-2xl bg-white space-y-4 shadow-inner">
+                <div className="flex flex-col items-center">
+                   <img src={`https://promptpay.io/0972396095/${price}.png`} alt="QR" className="w-56 h-56 rounded-lg shadow-md mb-2" />
+                   <p className="text-xs text-gray-400">สแกนเพื่อจ่าย {price} บาท</p>
                 </div>
-                <label className="block">
-                  <span className="block text-sm font-bold text-gray-700 mb-2">แนบสลิปโอนเงิน *</span>
+                <div className="space-y-2">
+                  <span className="block text-sm font-bold text-gray-700">แนบสลิปโอนเงิน <span className="text-red-500">*</span></span>
                   <input
                     type="file"
                     required
                     accept="image/*"
                     onChange={(e) => setPaymentSlipFile(e.target.files?.[0] || null)}
-                    className="w-full text-sm text-gray-600"
+                    className="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                   />
-                </label>
+                </div>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading || !session}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-700 shadow-lg disabled:from-gray-400"
+              className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-xl hover:bg-blue-700 shadow-xl disabled:bg-gray-300 disabled:cursor-not-allowed transform transition active:scale-95"
             >
-              {loading ? 'กำลังประมวลผล...' : 'ยืนยันการจองที่นั่ง'}
+              {loading ? 'กำลังบันทึกข้อมูล...' : 'ยืนยันการจอง'}
             </button>
           </form>
         </div>
