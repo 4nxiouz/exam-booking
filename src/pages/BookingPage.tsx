@@ -65,33 +65,38 @@ export default function BookingPage({ session }: { session: any }) {
     return data.publicUrl;
   };
 
-  const handleBooking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!session) {
-      alert('กรุณาเข้าสู่ระบบก่อนทำการจองครับ');
-      navigate('/login');
+const handleBooking = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  // 1. เช็คความปลอดภัยขั้นสูงสุด
+  if (!session?.user) {
+    alert('กรุณาเข้าสู่ระบบก่อนทำการจองครับ');
+    navigate('/login');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // 2. ดึงข้อมูลจาก Session แบบใช้ Optional Chaining เสมอ
+    const userEmail = session.user.email;
+    const userId = session.user.id;
+
+    if (!userEmail || !userId) throw new Error("User information missing");
+
+    // 3. (โค้ดดึงข้อมูลรอบสอบเดิมของมึง...)
+    const { data: round } = await supabase
+      .from('exam_rounds')
+      .select('current_seats, max_seats')
+      .eq('id', selectedRound)
+      .single();
+
+    if (!round || (round.current_seats >= round.max_seats)) {
+      alert('ขออภัย รอบนี้เต็มแล้วครับ');
+      setLoading(false);
       return;
     }
-
-    // กันเหนียว: ใช้อีเมลจาก session โดยตรงตอนยิง API
-    const finalEmail = session.user.email;
-
-    setLoading(true);
-
-    try {
-      const { data: round } = await supabase
-        .from('exam_rounds')
-        .select('current_seats, max_seats')
-        .eq('id', selectedRound)
-        .single();
-
-      if (!round || round.current_seats >= round.max_seats) {
-        alert('ขออภัย รอบนี้เต็มแล้วครับ');
-        setLoading(false);
-        return;
-      }
-
+    
       let idCardUrl = null;
       let paymentSlipUrl = null;
 
@@ -103,25 +108,25 @@ export default function BookingPage({ session }: { session: any }) {
         paymentSlipUrl = await uploadFile(paymentSlipFile, 'payment-slips');
       }
 
-      const { data: booking, error } = await supabase
-        .from('bookings')
-        .insert({
-          exam_round_id: selectedRound,
-          user_type: userType,
-          full_name: formData.fullName,
-          email: finalEmail, // ใช้อีเมลจาก Google โดยตรง
-          phone: formData.phone,
-          price,
-          payment_method: payMethod,
-          id_card_url: idCardUrl,
-          payment_slip_url: paymentSlipUrl,
-          payment_status: payMethod === 'transfer' ? 'pending' : 'verified',
-          user_id: session.user.id
-        })
-        .select()
-        .single();
+const { data: booking, error } = await supabase
+      .from('bookings')
+      .insert({
+        exam_round_id: selectedRound,
+        user_type: userType,
+        full_name: formData.fullName,
+        email: userEmail, // ใช้ตัวแปรที่เช็คแล้ว
+        phone: formData.phone,
+        price,
+        payment_method: payMethod,
+        id_card_url: idCardUrl,
+        payment_slip_url: paymentSlipUrl,
+        payment_status: payMethod === 'transfer' ? 'pending' : 'verified',
+        user_id: userId // ใช้ตัวแปรที่เช็คแล้ว
+      })
+      .select()
+      .single();
 
-      if (error) throw error;
+    if (error) throw error;
 
       const { error: updateError } = await supabase
         .from('exam_rounds')
