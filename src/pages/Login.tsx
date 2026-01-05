@@ -42,7 +42,11 @@ export default function Login() {
         {loading ? (
           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         ) : (
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="google icon" />
+          <img 
+            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
+            className="w-5 h-5" 
+            alt="google icon" 
+          />
         )}
         {loading ? 'กำลังเชื่อมต่อ...' : 'Continue with Google'}
       </button>
