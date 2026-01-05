@@ -334,3 +334,96 @@ const { data: booking, error } = await supabase
     </div>
   );
 }
+const handleBooking = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!session?.user) {
+    alert('กรุณาเข้าสู่ระบบก่อนทำการจองครับ');
+    navigate('/login');
+    return;
+  }
+
+  // เช็คก่อนว่าเลือกหรือยัง
+  if (!selectedRound) {
+    alert('กรุณาเลือกรอบสอบก่อนมึง!');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const userEmail = session.user.email;
+    const userId = session.user.id;
+
+    if (!userEmail || !userId) throw new Error("User information missing");
+
+    // 1. เช็ครอบสอบล่าสุดจาก DB อีกทีกันเหนียว
+    const { data: round, error: roundError } = await supabase
+      .from('exam_rounds')
+      .select('current_seats, max_seats')
+      .eq('id', selectedRound)
+      .single();
+
+    if (roundError || !round || (round.current_seats >= round.max_seats)) {
+      alert('ขออภัย รอบนี้เพิ่งเต็มเมื่อกี้เลย หรือหาข้อมูลไม่เจอครับ');
+      setLoading(false);
+      return;
+    }
+    
+    let idCardUrl = null;
+    let paymentSlipUrl = null;
+
+    // 2. จัดการเรื่องไฟล์ (ใส่ Alert แยกจุด)
+    try {
+      if (isInternal && idCardFile) {
+        idCardUrl = await uploadFile(idCardFile, 'id-cards');
+      }
+      if (payMethod === 'transfer' && paymentSlipFile) {
+        paymentSlipUrl = await uploadFile(paymentSlipFile, 'payment-slips');
+      }
+    } catch (uploadErr) {
+      console.error('Upload Error:', uploadErr);
+      alert('อัปโหลดไฟล์ไม่สำเร็จ! เช็คขนาดไฟล์หรือสิทธิ์การเข้าถึง Storage นะมึง');
+      setLoading(false);
+      return;
+    }
+
+    // 3. บันทึกการจอง
+    const { data: booking, error: insertError } = await supabase
+      .from('bookings')
+      .insert({
+        exam_round_id: selectedRound,
+        user_type: userType,
+        full_name: formData.fullName,
+        email: userEmail,
+        phone: formData.phone,
+        price,
+        payment_method: payMethod,
+        id_card_url: idCardUrl,
+        payment_slip_url: paymentSlipUrl,
+        payment_status: payMethod === 'transfer' ? 'pending' : 'verified',
+        user_id: userId
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    // 4. อัปเดตจำนวนที่นั่ง (ใช้ RPC หรือ Update ตรงๆ แบบมึงก็ได้)
+    const { error: updateError } = await supabase
+      .from('exam_rounds')
+      .update({ current_seats: round.current_seats + 1 })
+      .eq('id', selectedRound);
+
+    if (updateError) console.warn("Seat counter update failed, but booking saved.");
+
+    setBookingCode(booking.booking_code);
+    setSuccess(true);
+
+  } catch (error: any) {
+    console.error('Error detail:', error);
+    alert(`เกิดข้อผิดพลาด: ${error.message || 'ลองใหม่อีกครั้ง'}`);
+  } finally {
+    setLoading(false);
+  }
+};
