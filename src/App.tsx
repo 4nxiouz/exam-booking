@@ -13,29 +13,38 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        if (session?.user?.email) {
-          setIsAdmin(ADMIN_EMAILS.includes(session.user.email.toLowerCase()));
-        }
-      } catch (err) {
-        console.error("Auth error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initializeAuth();
+// ใน App.tsx
+useEffect(() => {
+  const initializeAuth = async () => {
+    try {
+      // เช็คว่ามี Supabase instance ไหมก่อนเรียก
+      if (!supabase) return;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
-      setIsAdmin(session?.user?.email ? ADMIN_EMAILS.includes(session.user.email.toLowerCase()) : false);
-    });
+      
+      if (session?.user?.email) {
+        setIsAdmin(ADMIN_EMAILS.includes(session.user.email.toLowerCase()));
+      }
+    } catch (err) {
+      console.error("Failed to fetch session:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => subscription.unsubscribe();
-  }, []);
+  initializeAuth();
+  
+  // ใส่เซฟตี้ให้ Subscription
+  const { data: authListener } = supabase?.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+    setIsAdmin(session?.user?.email ? ADMIN_EMAILS.includes(session.user.email.toLowerCase()) : false);
+  }) || { data: { subscription: null } };
+
+  return () => {
+    authListener?.subscription?.unsubscribe();
+  };
+}, []);
 
   if (loading) return <div className="flex h-screen items-center justify-center font-sans text-gray-500">Loading...</div>;
 
