@@ -1,13 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
-// ดึงค่ามาพักไว้ก่อน
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// เช็คผ่าน Console ว่าบน Vercel มันเห็นค่าไหม
+// 1. ถ้าค่าไม่มี ห้ามรัน createClient แบบดุ่ยๆ
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("⚠️ [Supabase] Missing Environment Variables!");
+  console.error("❌ SUPABASE_URL หรือ ANON_KEY หายไป! ไปเช็ค .env หรือ Vercel Settings ด่วน!");
 }
 
-// ป้องกันการ Throw Error ที่ทำให้หน้าขาวโดยการส่ง String เปล่าไปก่อน (แม้จะต่อไม่ได้แต่หน้าจะไม่ขาว)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// 2. ป้องกันหน้าขาวด้วยการเช็คค่าก่อนสร้าง Client
+// ถ้าไม่มีค่า ให้ส่งเป็น dummy client หรือจัดการ error ให้ดี
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : (null as any);
