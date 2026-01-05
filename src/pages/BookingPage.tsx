@@ -323,12 +323,17 @@ const { data: booking, error } = await supabase
 
             <button
               type="submit"
-              disabled={loading || !session}
-              className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-xl hover:bg-blue-700 shadow-xl disabled:bg-gray-300 disabled:cursor-not-allowed transform transition active:scale-95"
-            >
-              {loading ? 'กำลังบันทึกข้อมูล...' : 'ยืนยันการจอง'}
-            </button>
-          </form>
+              disabled={
+    loading || 
+    !session || 
+    !selectedRound || 
+    (payMethod === 'transfer' && !paymentSlipFile) || 
+    (isInternal && !idCardFile)
+  }
+  className="w-full bg-blue-600 text-white py-4 rounded-xl font-black text-xl hover:bg-blue-700 shadow-xl disabled:bg-gray-300 disabled:cursor-not-allowed transform transition active:scale-95"
+>
+  {loading ? 'กำลังบันทึกข้อมูล...' : 'ยืนยันการจอง'}
+</button>
         </div>
       </div>
     </div>
