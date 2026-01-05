@@ -6,6 +6,7 @@ import BookingPage from './pages/BookingPage';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 
+// รายชื่อ Admin
 const ADMIN_EMAILS = ['bass.chinz@gmail.com', 'admin2@gmail.com', 'friend@gmail.com'];
 
 function App() {
@@ -28,8 +29,7 @@ function App() {
       } catch (err) {
         console.error("Auth error:", err);
       } finally {
-        // 🚨 ถ้ามี hash access_token บน URL อย่าเพิ่งปิด loading 
-        // ให้รอ onAuthStateChange ทำงานให้เสร็จก่อน
+        // ถ้าไม่มี token ใน URL ให้ปิด loading ได้เลย
         if (mounted && !window.location.hash.includes('access_token')) {
           setLoading(false);
         }
@@ -38,11 +38,13 @@ function App() {
 
     initializeAuth();
 
+    // ดักฟังการเปลี่ยนแปลงสถานะ Login
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (mounted) {
         setSession(currentSession);
-        setIsAdmin(currentSession?.user?.email ? ADMIN_EMAILS.includes(currentSession.user.email.toLowerCase()) : false);
-        setLoading(false); // ปิด loading ได้เมื่อ session นิ่งแล้ว
+        const email = currentSession?.user?.email;
+        setIsAdmin(email ? ADMIN_EMAILS.includes(email.toLowerCase()) : false);
+        setLoading(false); 
       }
     });
 
@@ -52,40 +54,52 @@ function App() {
     };
   }, []);
 
-  // 1. ดักหน้าขาวตอนกำลังแลก Token จาก Google
+  // 1. หน้า Loading ระหว่างเช็คสิทธิ์ หรือรอ Google Redirect
   if (loading || window.location.hash.includes('access_token')) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white font-sans text-gray-500">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="font-bold">กำลังยืนยันตัวตนกับ Google...</p>
-        </div>
+      <div className="flex h-screen flex-col items-center justify-center bg-white">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+        <p className="mt-4 font-bold text-gray-600 animate-pulse">กำลังยืนยันตัวตนกับ Google...</p>
       </div>
     );
   }
 
-  // 2. ถ้าไม่มี Session ให้โชว์หน้า Login
-  if (!session) {
-    return <Login />;
-  }
-
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 font-sans">
-        <Navbar session={session} isAdmin={isAdmin} />
+      <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
+        {/* โชว์ Navbar เฉพาะตอนที่ Login แล้วเท่านั้น */}
+        {session && <Navbar session={session} isAdmin={isAdmin} />}
         
-        <main className="container mx-auto px-4 py-8">
+        <main className={session ? "container mx-auto px-4 py-8" : ""}>
           <Routes>
-            <Route path="/" element={<BookingPage session={session} />} />
-            
-            {/* 🚨 ต้องส่ง session เข้าไปใน AdminDashboard ด้วย! */}
-            <Route 
-              path="/admin" 
-              element={isAdmin ? <AdminDashboard session={session} /> : <Navigate to="/" replace />} 
-            />
+            {/* Guest Route: ถ้ายังไม่ Login ให้ไปหน้า Login เท่านั้น */}
+            {!session ? (
+              <>
+                <Route path="/login" element={<Login />} />
+                <Route path="*" element={<Navigate to="/login" replace />} />
+              </>
+            ) : (
+              /* Protected Routes: ต้อง Login แล้วเท่านั้น */
+              <>
+                <Route path="/" element={<BookingPage session={session} />} />
+                
+                {/* Admin Route: เช็ค isAdmin อีกชั้นเพื่อความชัวร์ */}
+                <Route 
+                  path="/admin" 
+                  element={
+                    isAdmin ? (
+                      <AdminDashboard session={session} />
+                    ) : (
+                      <Navigate to="/" replace />
+                    )
+                  } 
+                />
 
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+                {/* ถ้า Login แล้ว จะเข้าหน้า Login ไม่ได้ ให้เด้งไปหน้าแรก */}
+                <Route path="/login" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </>
+            )}
           </Routes>
         </main>
       </div>
