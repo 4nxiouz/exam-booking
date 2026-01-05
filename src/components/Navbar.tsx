@@ -2,6 +2,12 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 export default function Navbar({ session, isAdmin }: { session: any, isAdmin: boolean }) {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    // ดีดกลับไปหน้าแรกและล้าง state ทั้งหมด กันค้าง
+    window.location.href = '/'; 
+  };
+
   return (
     <nav className="bg-white shadow-sm px-6 py-4 flex justify-between items-center sticky top-0 z-50">
       <Link to="/" className="text-xl font-extrabold text-blue-600 uppercase tracking-tighter">
@@ -19,10 +25,11 @@ export default function Navbar({ session, isAdmin }: { session: any, isAdmin: bo
           <div className="flex items-center gap-3">
             <div className="hidden sm:block text-right">
               <p className="text-xs text-gray-400 leading-none">Logged in as</p>
-              <p className="text-sm text-gray-700 font-bold">{session.user.email}</p>
+              {/* 🛡️ ใส่ ?. กันตาย และ || เพื่อบอกว่าไม่มีเมล */}
+              <p className="text-sm text-gray-700 font-bold">{session?.user?.email || 'User'}</p>
             </div>
             <button 
-              onClick={() => supabase.auth.signOut()}
+              onClick={handleSignOut}
               className="text-sm font-bold text-gray-600 bg-gray-100 px-4 py-2 rounded-lg hover:bg-gray-200"
             >
               Sign Out
