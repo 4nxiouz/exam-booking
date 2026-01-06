@@ -6,7 +6,7 @@ import BookingPage from './pages/BookingPage';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 
-// รายชื่อ Admin
+// รายชื่อ Admin ที่มีสิทธิ์เข้าหน้า Dashboard
 const ADMIN_EMAILS = ['bass.chinz@gmail.com', 'admin2@gmail.com', 'friend@gmail.com'];
 
 function App() {
@@ -29,7 +29,7 @@ function App() {
       } catch (err) {
         console.error("Auth error:", err);
       } finally {
-        // ถ้าไม่มี token ใน URL (hash) ให้ปิด loading ได้เลย
+        // ถ้าไม่มี token ใน URL ให้ปิด loading
         if (mounted && !window.location.hash.includes('access_token')) {
           setLoading(false);
         }
@@ -38,7 +38,6 @@ function App() {
 
     initializeAuth();
 
-    // ดักฟังการเปลี่ยนแปลงสถานะ Login (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       if (mounted) {
         setSession(currentSession);
@@ -54,7 +53,7 @@ function App() {
     };
   }, []);
 
-  // 1. หน้า Loading ระหว่างเช็คสิทธิ์ หรือรอ Google Redirect
+  // หน้า Loading ระหว่างเช็คสิทธิ์
   if (loading || window.location.hash.includes('access_token')) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-white">
@@ -67,35 +66,23 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
-        {/* โชว์ Navbar เฉพาะตอนที่ Login แล้วเท่านั้น */}
+        {/* โชว์ Navbar เฉพาะตอนที่ Login แล้ว */}
         {session && <Navbar session={session} isAdmin={isAdmin} />}
         
         <main className={session ? "container mx-auto px-4 py-8" : ""}>
           <Routes>
-            {/* 🛡️ กรณีที่ยังไม่ได้ Login */}
             {!session ? (
               <>
                 <Route path="/login" element={<Login />} />
-                {/* ถ้าพยายามไปหน้าอื่น ให้เด้งกลับไป Login */}
                 <Route path="*" element={<Navigate to="/login" replace />} />
               </>
             ) : (
-              /* ✅ กรณีที่ Login แล้ว */
               <>
                 <Route path="/" element={<BookingPage session={session} />} />
-                
                 <Route 
                   path="/admin" 
-                  element={
-                    isAdmin ? (
-                      <AdminDashboard session={session} />
-                    ) : (
-                      <Navigate to="/" replace />
-                    )
-                  } 
+                  element={isAdmin ? <AdminDashboard session={session} /> : <Navigate to="/" replace />} 
                 />
-
-                {/* ถ้า Login แล้ว จะเข้าหน้า Login ซ้ำไม่ได้ ให้เด้งไปหน้าแรก */}
                 <Route path="/login" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>
